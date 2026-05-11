@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ensureBirdclawDirsMock = vi.fn();
@@ -38,6 +39,11 @@ const removeBlockMock = vi.fn();
 const removeMuteMock = vi.fn();
 const maybeAutoUpdateBackupMock = vi.fn();
 const maybeAutoSyncBackupMock = vi.fn();
+const packageVersion = (
+	JSON.parse(
+		readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+	) as { version: string }
+).version;
 const spawnMock = vi.fn();
 const execFileAsyncMock = vi.fn();
 const execFileMock = vi.fn();
@@ -421,7 +427,7 @@ describe("cli", () => {
 
 		await runCli(["node", "birdclaw", "--version"]);
 
-		expect(stdoutWriteMock).toHaveBeenCalledWith("0.4.0\n");
+		expect(stdoutWriteMock).toHaveBeenCalledWith(`${packageVersion}\n`);
 		expect(exitMock).toHaveBeenCalledWith(0);
 		stdoutWriteMock.mockRestore();
 	});
