@@ -22,6 +22,7 @@ Status: WIP. Real and usable. Not done. Expect schema churn, transport gaps, and
 - archive autodiscovery on macOS
 - archive import for tweets, likes, profiles, and full DMs
 - archive import for bookmark exports when present
+- archive import streams bundled media files into the local originals cache and extracts `video_info.variants[]` for video and animated-GIF rows
 - live likes and bookmarks sync through `xurl` or `bird`
 - cache-first followers/following sync through `bird` or `xurl`
 - local follow graph queries for top followers, unfollows, mutuals, and non-mutual following
@@ -107,6 +108,7 @@ Important paths:
 
 - DB: `~/.birdclaw/birdclaw.sqlite`
 - media cache: `~/.birdclaw/media`
+- archive-extracted media: `~/.birdclaw/media/originals/archive/<kind>/<id>/<filename>` where `<kind>` is one of `tweets`, `dms`, `community`, `deleted`, `profile`, `moments`, `dmGroup`
 - avatar cache: `~/.birdclaw/media/thumbs/avatars`
 - Playwright test home: `.playwright-home`
 
@@ -217,6 +219,8 @@ birdclaw import archive --json
 birdclaw import archive ~/Downloads/twitter-archive-2025.zip --json
 birdclaw import hydrate-profiles --json
 ```
+
+`import archive` is idempotent. Re-running parses follower/following edges into the local follow graph, streams bundled media files under `data/tweets_media/`, `data/direct_messages_media/`, and the other archive media folders into `~/.birdclaw/media/originals/archive/<kind>/<id>/`, and pulls `video_info.variants[]` so archive video and animated-GIF rows carry mp4 URLs for the live media fetcher. Already-extracted files are skipped when size matches.
 
 Back up the local SQLite store as canonical JSONL text:
 
