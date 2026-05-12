@@ -571,7 +571,7 @@ describe("media fetch", () => {
 				}),
 			],
 		});
-		expect(existsSync(path.join(mediaDir, "chunked.tmp"))).toBe(false);
+		expect(existsSync(path.join(mediaDir, "chunked.mp4.tmp"))).toBe(false);
 		expect(existsSync(path.join(mediaDir, "chunked.mp4"))).toBe(false);
 	});
 
@@ -605,7 +605,7 @@ describe("media fetch", () => {
 				}),
 			],
 		});
-		expect(readFileSync(path.join(mediaDir, "flaky.tmp"))).toEqual(
+		expect(readFileSync(path.join(mediaDir, "flaky.mp4.tmp"))).toEqual(
 			Buffer.from([1, 2, 3]),
 		);
 
@@ -619,14 +619,56 @@ describe("media fetch", () => {
 		expect(readFileSync(path.join(mediaDir, "flaky.mp4"))).toEqual(
 			Buffer.from([1, 2, 3, 4, 5]),
 		);
-		expect(existsSync(path.join(mediaDir, "flaky.tmp"))).toBe(false);
+		expect(existsSync(path.join(mediaDir, "flaky.mp4.tmp"))).toBe(false);
+	});
+
+	it("isolates thumbnail and video tmp files when media keys match", async () => {
+		const root = home();
+		insertTweet("tweet_1", [
+			{
+				url: "https://pbs.twimg.com/ext_tw_video_thumb/foo.jpg",
+				type: "video",
+				variants: [mp4("foo")],
+			},
+		]);
+		const fetchMock = vi.fn(async (url: string) =>
+			url.includes("pbs.twimg.com")
+				? new Response(
+						failingStream(
+							new Uint8Array([0xff, 0xd8]),
+							new Error("thumbnail reset"),
+						),
+					)
+				: new Response(
+						failingStream(new Uint8Array([1, 2]), new Error("video reset")),
+					),
+		);
+
+		await fetchTweetMedia({ fetchImpl: fetchMock, pacingMs: 0 });
+
+		const mediaDir = path.join(root, "media", "originals");
+		const [, videoInit] = fetchMock.mock.calls[1] as unknown as [
+			string,
+			RequestInit,
+		];
+		expect((videoInit.headers as Record<string, string>).range).toBeUndefined();
+		expect(readFileSync(path.join(mediaDir, "foo.jpg.tmp"))).toEqual(
+			Buffer.from([0xff, 0xd8]),
+		);
+		expect(readFileSync(path.join(mediaDir, "foo.mp4.tmp"))).toEqual(
+			Buffer.from([1, 2]),
+		);
+		expect(existsSync(path.join(mediaDir, "foo.mp4"))).toBe(false);
 	});
 
 	it("resumes partial video tmp files with a range request", async () => {
 		const root = home();
 		const mediaDir = path.join(root, "media", "originals");
 		mkdirSync(mediaDir, { recursive: true });
-		writeFileSync(path.join(mediaDir, "resume.tmp"), Buffer.from([1, 2, 3]));
+		writeFileSync(
+			path.join(mediaDir, "resume.mp4.tmp"),
+			Buffer.from([1, 2, 3]),
+		);
 		insertTweet("tweet_1", [{ type: "video", variants: [mp4("resume")] }]);
 		const fetchMock = vi.fn(
 			async () =>
@@ -646,6 +688,40 @@ describe("media fetch", () => {
 		expect(readFileSync(path.join(mediaDir, "resume.mp4"))).toEqual(
 			Buffer.from([1, 2, 3, 4, 5, 6]),
 		);
+	});
+
+	it("resets max-bytes accounting when a server ignores range resume", async () => {
+		const root = home();
+		const mediaDir = path.join(root, "media", "originals");
+		mkdirSync(mediaDir, { recursive: true });
+		writeFileSync(
+			path.join(mediaDir, "ignored.mp4.tmp"),
+			Buffer.from([1, 2, 3]),
+		);
+		insertTweet("tweet_1", [{ type: "video", variants: [mp4("ignored")] }]);
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(new Uint8Array([4, 5, 6, 7]), {
+					headers: { "content-length": "4" },
+				}),
+		);
+
+		const result = await fetchTweetMedia({
+			fetchImpl: fetchMock,
+			maxBytes: 5,
+			pacingMs: 0,
+		});
+
+		const [, init] = fetchMock.mock.calls[0] as unknown as [
+			string,
+			RequestInit,
+		];
+		expect(init.headers).toMatchObject({ range: "bytes=3-" });
+		expect(result).toMatchObject({ fetched: 1, failed: 0 });
+		expect(readFileSync(path.join(mediaDir, "ignored.mp4"))).toEqual(
+			Buffer.from([4, 5, 6, 7]),
+		);
+		expect(existsSync(path.join(mediaDir, "ignored.mp4.tmp"))).toBe(false);
 	});
 
 	it("fetches video serially even when image parallelism is higher", async () => {

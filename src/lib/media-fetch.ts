@@ -145,13 +145,14 @@ function imageCandidate(
 		return null;
 	}
 	const mediaKey = basenameKey(url);
+	const ext = imageExtension(url);
 	return {
 		kind: "image",
 		mediaKey,
 		tweetId,
 		url: url.toString(),
-		path: path.join(dir, `${mediaKey}${imageExtension(url)}`),
-		tmpPath: path.join(dir, `${mediaKey}.tmp`),
+		path: path.join(dir, `${mediaKey}${ext}`),
+		tmpPath: path.join(dir, `${mediaKey}${ext}.tmp`),
 	};
 }
 
@@ -215,7 +216,7 @@ function videoCandidate(
 		tweetId,
 		url: url.toString(),
 		path: path.join(dir, `${mediaKey}.mp4`),
-		tmpPath: path.join(dir, `${mediaKey}.tmp`),
+		tmpPath: path.join(dir, `${mediaKey}.mp4.tmp`),
 	};
 }
 
@@ -269,7 +270,7 @@ function archiveVideoCandidates(
 				tweetId,
 				url: `archive:${archivePath}`,
 				path: path.join(dir, `${mediaKey}${ext}`),
-				tmpPath: path.join(dir, `${mediaKey}.tmp`),
+				tmpPath: path.join(dir, `${mediaKey}${ext}.tmp`),
 				archivePath,
 			});
 		}
@@ -592,7 +593,7 @@ async function fetchOne({
 				item.tmpPath,
 				append,
 				maxBytes,
-				partialBytes,
+				append ? partialBytes : 0,
 			);
 		} catch (error) {
 			if (error instanceof Error && error.message === "max-bytes") {
