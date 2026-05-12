@@ -435,6 +435,14 @@ function fail(
 	};
 }
 
+/**
+ * Archive reuse consumes files extracted by the sibling
+ * `feat/import-archive-followers-following` branch into
+ * `media/originals/archive/tweets/<tweet_id>/...`.
+ *
+ * This fetcher intentionally does not extract archive ZIP media itself; it only
+ * reuses that layout when it is already present.
+ */
 function archivePathFor(item: Candidate, mediaOriginalsDir: string) {
 	if (item.archivePath) return item.archivePath;
 	if (!item.tweetId || !item.mediaKey) return null;
@@ -629,17 +637,33 @@ async function runGroup(
 	worker: (item: Candidate) => Promise<void>,
 ) {
 	let next = 0;
+	let lastStart: number | null = null;
+	let pace = Promise.resolve();
+	const runPaced = async (item: Candidate) => {
+		const previous = pace;
+		let release = () => {};
+		pace = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await previous;
+		let work: Promise<void>;
+		try {
+			const waitMs =
+				lastStart !== null ? Math.max(0, lastStart + pacingMs - now()) : 0;
+			if (waitMs > 0) await sleep(waitMs);
+			lastStart = now();
+			work = worker(item);
+		} finally {
+			release();
+		}
+		await work;
+	};
 	await Promise.all(
 		Array.from({ length: Math.min(parallel, items.length) }, async () => {
-			let lastStart: number | null = null;
 			for (;;) {
 				const item = items[next++];
 				if (!item) return;
-				const waitMs =
-					lastStart !== null ? Math.max(0, lastStart + pacingMs - now()) : 0;
-				if (waitMs > 0) await sleep(waitMs);
-				lastStart = now();
-				await worker(item);
+				await runPaced(item);
 			}
 		}),
 	);

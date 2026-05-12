@@ -404,6 +404,37 @@ describe("media fetch", () => {
 		expect(result.duration_ms).toBeGreaterThanOrEqual(25);
 	});
 
+	it("paces image request starts globally across parallel workers", async () => {
+		home();
+		for (let index = 0; index < 6; index += 1) {
+			insertTweet(
+				`tweet_${index}`,
+				[pbs(`parallel_${index}`)],
+				`2026-05-02T12:00:0${index}.000Z`,
+			);
+		}
+		let clock = 0;
+		const starts: number[] = [];
+
+		await fetchTweetMedia({
+			fetchImpl: async () => {
+				starts.push(clock);
+				return new Response(new Uint8Array([1]));
+			},
+			now: () => clock,
+			sleep: async (ms) => {
+				clock += ms;
+			},
+			pacingMs: 100,
+			parallel: 3,
+		});
+
+		expect(starts).toHaveLength(6);
+		expect(
+			starts.slice(1).every((start, index) => start - starts[index] >= 100),
+		).toBe(true);
+	});
+
 	it("selects the highest-bitrate mp4 video variant", async () => {
 		const root = home();
 		insertTweet("tweet_1", [
