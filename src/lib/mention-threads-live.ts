@@ -370,9 +370,11 @@ async function fetchParentChainViaXurl({
 	let fallbackDepth = 0;
 	let generalReadTweets = 0;
 
-	if (mention.rawTweet && mention.rawTweet.id === mention.id) {
-		pages.push({ data: [mention.rawTweet] });
-	}
+	const rawAnchorPayload =
+		mention.rawTweet && mention.rawTweet.id === mention.id
+			? ({ data: [mention.rawTweet] } satisfies XurlTweetsResponse)
+			: undefined;
+	let shouldUseRawAnchor = Boolean(rawAnchorPayload);
 
 	if (!nextParentId) {
 		const anchorPayload = await getTweetById(mention.id);
@@ -380,11 +382,16 @@ async function fetchParentChainViaXurl({
 		generalReadTweets += anchorPayload.data.length;
 		const anchorTweet = anchorPayload.data[0];
 		if (anchorTweet) {
+			shouldUseRawAnchor = false;
 			seenTweetIds.add(anchorTweet.id);
 			nextParentId = anchorTweet.in_reply_to_user_id
 				? getReplyToId(anchorTweet)
 				: undefined;
 		}
+	}
+
+	if (shouldUseRawAnchor && rawAnchorPayload) {
+		pages.unshift(rawAnchorPayload);
 	}
 
 	while (nextParentId) {

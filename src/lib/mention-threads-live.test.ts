@@ -522,6 +522,90 @@ describe("mention thread sync", () => {
 		});
 	});
 
+	it("prefers fetched anchor data when cached xurl mentions lack parent metadata", async () => {
+		setupTempHome();
+		insertMention(
+			"mention_anchor_lookup",
+			"cached mention without reference data",
+			"2026-05-05T11:00:00.000Z",
+		);
+		upsertMentionEdge("mention_anchor_lookup", {
+			id: "mention_anchor_lookup",
+			author_id: "42",
+			text: "cached mention without reference data",
+			created_at: "2026-05-05T11:00:00.000Z",
+			conversation_id: "root_anchor_lookup",
+		});
+		mocks.searchRecentByConversationId.mockResolvedValueOnce({
+			data: [],
+			meta: { result_count: 0 },
+		});
+		mocks.getTweetById
+			.mockResolvedValueOnce({
+				data: [
+					{
+						id: "mention_anchor_lookup",
+						author_id: "42",
+						text: "fresh mention with reference data",
+						created_at: "2026-05-05T11:00:00.000Z",
+						conversation_id: "root_anchor_lookup",
+						referenced_tweets: [
+							{ type: "replied_to", id: "parent_anchor_lookup" },
+						],
+						in_reply_to_user_id: "43",
+					},
+				],
+				includes: { users: [{ id: "42", username: "sam", name: "Sam" }] },
+			})
+			.mockResolvedValueOnce({
+				data: [
+					{
+						id: "parent_anchor_lookup",
+						author_id: "43",
+						text: "fresh parent",
+						created_at: "2026-05-05T10:58:00.000Z",
+						conversation_id: "root_anchor_lookup",
+					},
+				],
+				includes: { users: [{ id: "43", username: "alex", name: "Alex" }] },
+			});
+		const { syncMentionThreads } = await import("./mention-threads-live");
+
+		const result = await syncMentionThreads({
+			mode: "xurl",
+			limit: 1,
+			delayMs: 0,
+		});
+		const row = getNativeDb()
+			.prepare("select text, reply_to_id from tweets where id = ?")
+			.get("mention_anchor_lookup");
+
+		expect(mocks.getTweetById).toHaveBeenNthCalledWith(
+			1,
+			"mention_anchor_lookup",
+		);
+		expect(mocks.getTweetById).toHaveBeenNthCalledWith(
+			2,
+			"parent_anchor_lookup",
+		);
+		expect(result).toMatchObject({
+			mergedTweets: 2,
+			generalReadTweets: 2,
+			results: [
+				expect.objectContaining({
+					tweetId: "mention_anchor_lookup",
+					strategy: "parent_walk",
+					fallbackDepth: 1,
+					count: 2,
+				}),
+			],
+		});
+		expect(row).toEqual({
+			text: "fresh mention with reference data",
+			reply_to_id: "parent_anchor_lookup",
+		});
+	});
+
 	it("falls back to walking the xurl parent chain for older conversations", async () => {
 		setupTempHome();
 		insertMention("mention_old", "old mention", "2026-05-05T11:00:00.000Z");
