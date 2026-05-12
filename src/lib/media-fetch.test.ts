@@ -41,6 +41,18 @@ function pbs(name: string) {
 	return { url: `https://pbs.twimg.com/media/${name}.jpg`, type: "image" };
 }
 
+function archiveTweetFile(root: string, tweetId: string, basename: string, ext = ".jpg") {
+	return path.join(
+		root,
+		"media",
+		"originals",
+		"archive",
+		"tweets",
+		tweetId,
+		`${tweetId}-${basename}${ext}`,
+	);
+}
+
 function mp4(name: string, bitrate = 832000) {
 	return {
 		url: `https://video.twimg.com/ext_tw_video/1/pu/vid/720x720/${name}.mp4`,
@@ -100,6 +112,92 @@ describe("media fetch", () => {
 			skipped_cached: 1,
 		});
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("reuses archive bytes before fetching from the CDN", async () => {
+		const root = home();
+		const archiveFile = archiveTweetFile(root, "tweet_1", "demo");
+		mkdirSync(path.dirname(archiveFile), { recursive: true });
+		writeFileSync(archiveFile, Buffer.from([9, 8, 7]));
+		insertTweet("tweet_1", [pbs("demo")]);
+		const fetchMock = vi.fn(async () => {
+			throw new Error("must not fetch");
+		});
+
+		const result = await fetchTweetMedia({ fetchImpl: fetchMock, pacingMs: 0 });
+
+		expect(result).toMatchObject({
+			fetched: 1,
+			images_fetched: 1,
+			reused_from_archive: 1,
+			bytes: 3,
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(readFileSync(path.join(root, "media", "originals", "demo.jpg"))).toEqual(
+			Buffer.from([9, 8, 7]),
+		);
+	});
+
+	it("falls through to HTTP when archive bytes are missing", async () => {
+		const root = home();
+		insertTweet("tweet_1", [pbs("demo")]);
+		const fetchMock = vi.fn(async () => new Response(new Uint8Array([1, 2])));
+
+		const result = await fetchTweetMedia({ fetchImpl: fetchMock, pacingMs: 0 });
+
+		expect(result).toMatchObject({
+			fetched: 1,
+			reused_from_archive: 0,
+			bytes: 2,
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(readFileSync(path.join(root, "media", "originals", "demo.jpg"))).toEqual(
+			Buffer.from([1, 2]),
+		);
+	});
+
+	it("ignores stale archive bytes with a different basename", async () => {
+		const root = home();
+		const archiveFile = archiveTweetFile(root, "tweet_1", "other");
+		mkdirSync(path.dirname(archiveFile), { recursive: true });
+		writeFileSync(archiveFile, "stale");
+		insertTweet("tweet_1", [pbs("demo")]);
+		const fetchMock = vi.fn(async () => new Response(new Uint8Array([3])));
+
+		const result = await fetchTweetMedia({ fetchImpl: fetchMock, pacingMs: 0 });
+
+		expect(result.reused_from_archive).toBe(0);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(readFileSync(archiveFile, "utf8")).toBe("stale");
+		expect(readFileSync(path.join(root, "media", "originals", "demo.jpg"))).toEqual(
+			Buffer.from([3]),
+		);
+	});
+
+	it("keeps reruns idempotent after archive reuse", async () => {
+		const root = home();
+		const archiveFile = archiveTweetFile(root, "tweet_1", "demo");
+		mkdirSync(path.dirname(archiveFile), { recursive: true });
+		writeFileSync(archiveFile, Buffer.from([4, 5]));
+		insertTweet("tweet_1", [pbs("demo")]);
+		const fetchMock = vi.fn(async () => {
+			throw new Error("must not fetch");
+		});
+
+		const first = await fetchTweetMedia({ fetchImpl: fetchMock, pacingMs: 0 });
+		writeFileSync(archiveFile, Buffer.from([0]));
+		const second = await fetchTweetMedia({ fetchImpl: fetchMock, pacingMs: 0 });
+
+		expect(first).toMatchObject({ fetched: 1, reused_from_archive: 1 });
+		expect(second).toMatchObject({
+			fetched: 0,
+			reused_from_archive: 0,
+			skipped_cached: 1,
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(readFileSync(path.join(root, "media", "originals", "demo.jpg"))).toEqual(
+			Buffer.from([4, 5]),
+		);
 	});
 
 	it("backs off and retries once after 429", async () => {

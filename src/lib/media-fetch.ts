@@ -6,7 +6,7 @@
  * skips files present on disk, paces requests, and backs off on 429.
  */
 import { createWriteStream, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
-import { rename } from "node:fs/promises";
+import { copyFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -29,6 +29,7 @@ type FetchOneResult = {
 	bytes: number;
 	rateLimited: boolean;
 	kind?: MediaKind;
+	reusedFromArchive?: boolean;
 	failure?: MediaFetchResult["failures"][number];
 };
 
@@ -38,6 +39,7 @@ export type MediaFetchResult = {
 	images_fetched: number;
 	videos_fetched: number;
 	gifs_fetched: number;
+	reused_from_archive: number;
 	skipped_cached: number;
 	failed: number;
 	rate_limited: number;
@@ -280,6 +282,34 @@ function fail(item: Candidate, reason: string, rateLimited = false): FetchOneRes
 	};
 }
 
+function archivePathFor(item: Candidate, mediaOriginalsDir: string) {
+	if (!item.tweetId || !item.mediaKey) return null;
+	const ext = path.extname(item.path);
+	if (!ext) return null;
+	return path.join(
+		mediaOriginalsDir,
+		"archive",
+		"tweets",
+		item.tweetId,
+		`${item.tweetId}-${item.mediaKey}${ext}`,
+	);
+}
+
+async function reuseFromArchive(item: Candidate, mediaOriginalsDir: string) {
+	const archivePath = archivePathFor(item, mediaOriginalsDir);
+	if (!archivePath || !existsSync(archivePath)) return null;
+	const bytes = fileSize(archivePath);
+	await copyFile(archivePath, item.tmpPath);
+	await rename(item.tmpPath, item.path);
+	return {
+		fetched: 1,
+		bytes,
+		rateLimited: false,
+		kind: item.kind,
+		reusedFromArchive: true,
+	} satisfies FetchOneResult;
+}
+
 function contentLength(response: Response) {
 	const value = Number(response.headers.get("content-length"));
 	return Number.isFinite(value) && value >= 0 ? value : null;
@@ -370,6 +400,7 @@ function applyFetched(result: MediaFetchResult, fetched: FetchOneResult) {
 		result.gifs_fetched += 1;
 		result.gif_bytes += fetched.bytes;
 	}
+	if (fetched.reusedFromArchive) result.reused_from_archive += 1;
 	if (fetched.rateLimited) result.rate_limited += 1;
 	if (fetched.failure) result.failures.push(fetched.failure);
 }
@@ -426,6 +457,7 @@ export async function fetchTweetMedia(options: MediaFetchOptions = {}) {
 		images_fetched: 0,
 		videos_fetched: 0,
 		gifs_fetched: 0,
+		reused_from_archive: 0,
 		skipped_cached,
 		failed: 0,
 		rate_limited: 0,
@@ -439,6 +471,15 @@ export async function fetchTweetMedia(options: MediaFetchOptions = {}) {
 	};
 
 	if (!options.dryRun) {
+		const httpCandidates: Candidate[] = [];
+		for (const item of candidates) {
+			const reused = await reuseFromArchive(item, mediaOriginalsDir);
+			if (reused) {
+				applyFetched(result, reused);
+			} else {
+				httpCandidates.push(item);
+			}
+		}
 		const fetchCandidate = async (item: Candidate) =>
 			applyFetched(
 				result,
@@ -452,7 +493,7 @@ export async function fetchTweetMedia(options: MediaFetchOptions = {}) {
 				}),
 			);
 		await runGroup(
-			candidates.filter((item) => item.kind === "image"),
+			httpCandidates.filter((item) => item.kind === "image"),
 			parallel,
 			pacingMs,
 			now,
@@ -460,7 +501,7 @@ export async function fetchTweetMedia(options: MediaFetchOptions = {}) {
 			fetchCandidate,
 		);
 		await runGroup(
-			candidates.filter((item) => item.kind !== "image"),
+			httpCandidates.filter((item) => item.kind !== "image"),
 			1,
 			videoPacingMs,
 			now,
@@ -488,6 +529,7 @@ export function formatMediaFetchResult(result: MediaFetchResult) {
 		`images=${result.images_fetched}`,
 		`videos=${result.videos_fetched}`,
 		`gifs=${result.gifs_fetched}`,
+		`reused_from_archive=${result.reused_from_archive}`,
 		`skipped_cached=${result.skipped_cached}`,
 		`failed=${result.failed}`,
 		`rate_limited=${result.rate_limited}`,
