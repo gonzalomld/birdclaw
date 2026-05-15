@@ -108,6 +108,46 @@ describe("TweetMediaGrid", () => {
 		);
 	});
 
+	it("opens direct video CDN URLs inline without a variant", () => {
+		const { container } = render(
+			<TweetMediaGrid
+				items={[
+					{
+						url: "https://video.twimg.com/ext_tw_video/clip.mp4",
+						type: "video",
+					},
+				]}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Open tweet media 1" }));
+
+		expect(container.querySelector("video")).toHaveAttribute(
+			"src",
+			"https://video.twimg.com/ext_tw_video/clip.mp4",
+		);
+	});
+
+	it("opens gif mp4 fallbacks inline as looping muted video", () => {
+		const { container } = render(
+			<TweetMediaGrid
+				items={[
+					{
+						url: "/media/demo.mp4",
+						type: "gif",
+					},
+				]}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Open tweet media 1" }));
+
+		const video = container.querySelector("video");
+		expect(video).toHaveAttribute("src", "/media/demo.mp4");
+		expect(video).toHaveAttribute("loop");
+		expect(video?.muted).toBe(true);
+	});
+
 	it("does not treat variant-less video thumbnails as playable video", () => {
 		const { container } = render(
 			<TweetMediaGrid
@@ -132,6 +172,24 @@ describe("TweetMediaGrid", () => {
 			"target",
 			"_blank",
 		);
+	});
+
+	it("closes the inline viewer from the close button", () => {
+		render(
+			<TweetMediaGrid
+				items={[
+					{
+						url: "https://example.com/one.jpg",
+						type: "image",
+					},
+				]}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Open tweet media 1" }));
+		fireEvent.click(screen.getByRole("button", { name: "Close media viewer" }));
+
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
 
 	it("keeps a fallback open path for unknown media", () => {
