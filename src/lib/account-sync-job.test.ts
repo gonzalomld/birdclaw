@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,32 @@ describe("account sync job", () => {
 		);
 		expect(agent.programArguments[2]).toContain("'--allow-bird-account'");
 		expect(agent.plist).toContain("com.steipete.birdclaw.account-sync");
+	});
+
+	it("builds default launchd arguments through env lookup when no program path is supplied", () => {
+		const agent = buildAccountSyncLaunchAgentPlist({
+			label: "com.example.birdclaw.sync&test",
+			refresh: false,
+			cacheTtlSeconds: 60,
+			logPath: "~/birdclaw audit/account-sync.jsonl",
+			stdoutPath: "~/birdclaw logs/out.log",
+			stderrPath: "~/birdclaw logs/err.log",
+		});
+
+		expect(agent.programArguments.slice(0, 2)).toEqual([
+			"/usr/bin/env",
+			"birdclaw",
+		]);
+		expect(agent.programArguments).not.toContain("--refresh");
+		expect(agent.programArguments).toContain("--cache-ttl");
+		expect(agent.programArguments).toContain("60");
+		expect(agent.plist).toContain("com.example.birdclaw.sync&amp;test");
+		expect(agent.envFile).toBeUndefined();
+	});
+
+	it("treats empty step lists as the default selection", () => {
+		expect(parseAccountSyncSteps(undefined)).toBeUndefined();
+		expect(parseAccountSyncSteps(" , ")).toBeUndefined();
 	});
 
 	it("installs without loading when requested", async () => {
@@ -240,6 +266,151 @@ describe("account sync job", () => {
 					kind: "bookmarks",
 					ok: false,
 					error: expect.stringContaining("--allow-bird-account"),
+				},
+			],
+		});
+	});
+
+	it("skips cleanly when another account sync job holds the lock", async () => {
+		tempDir = mkdtempSync(path.join(os.tmpdir(), "birdclaw-account-job-"));
+		const logPath = path.join(tempDir, "audit.jsonl");
+		const lockPath = path.join(tempDir, "sync.lock");
+		writeFileSync(lockPath, "{}\n");
+
+		const result = await runAccountSyncJob({
+			steps: ["mention-threads"],
+			logPath,
+			lockPath,
+			db: {} as never,
+		});
+
+		expect(syncMentionThreadsMock).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			ok: true,
+			skipped: "already-running",
+			steps: [],
+		});
+		const entry = JSON.parse(readFileSync(logPath, "utf8").trim()) as unknown;
+		expect(entry).toMatchObject({
+			ok: true,
+			skipped: "already-running",
+			steps: [],
+		});
+	});
+
+	it("runs Bird-backed non-default account steps when explicitly allowed", async () => {
+		tempDir = mkdtempSync(path.join(os.tmpdir(), "birdclaw-account-job-"));
+		const logPath = path.join(tempDir, "audit.jsonl");
+		const lockPath = path.join(tempDir, "sync.lock");
+		const db = {
+			prepare: () => ({
+				get: () => ({ id: "acct_primary" }),
+			}),
+		} as never;
+		syncHomeTimelineMock.mockResolvedValue({
+			source: "bird",
+			count: 10,
+		});
+		syncMentionsMock.mockResolvedValue({
+			source: "bird",
+			count: 5,
+		});
+		syncDirectMessagesViaCachedBirdMock.mockResolvedValue({
+			source: "bird",
+			messages: 2,
+		});
+
+		const result = await runAccountSyncJob({
+			account: "acct_openclaw",
+			steps: ["timeline", "mentions", "dms"],
+			allowBirdAccount: true,
+			limit: 120,
+			maxPages: 4,
+			refresh: false,
+			cacheTtlMs: 1000,
+			logPath,
+			lockPath,
+			db,
+		});
+
+		expect(syncHomeTimelineMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				account: "acct_openclaw",
+				limit: 120,
+				following: true,
+				refresh: false,
+				cacheTtlMs: 1000,
+			}),
+		);
+		expect(syncMentionsMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				account: "acct_openclaw",
+				mode: "bird",
+				limit: 120,
+				maxPages: 4,
+				refresh: false,
+			}),
+		);
+		expect(syncDirectMessagesViaCachedBirdMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				account: "acct_openclaw",
+				limit: 50,
+				refresh: false,
+				cacheTtlMs: 1000,
+			}),
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			options: {
+				account: "acct_openclaw",
+				allowBirdAccount: true,
+				refresh: false,
+				cacheTtlMs: 1000,
+			},
+			steps: [
+				{ kind: "timeline", ok: true, count: 10, source: "bird" },
+				{ kind: "mentions", ok: true, count: 5, source: "bird" },
+				{ kind: "dms", ok: true, count: 2, source: "bird" },
+			],
+		});
+	});
+
+	it("records mention-thread sync errors as failed step results", async () => {
+		tempDir = mkdtempSync(path.join(os.tmpdir(), "birdclaw-account-job-"));
+		const logPath = path.join(tempDir, "audit.jsonl");
+		const lockPath = path.join(tempDir, "sync.lock");
+		syncMentionThreadsMock.mockRejectedValue(new Error("xurl failed"));
+
+		const result = await runAccountSyncJob({
+			account: "acct_openclaw",
+			steps: ["mention-threads"],
+			limit: 100,
+			logPath,
+			lockPath,
+			db: {
+				prepare: () => ({
+					get: () => ({ id: "acct_primary" }),
+				}),
+			} as never,
+		});
+
+		expect(syncMentionThreadsMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				account: "acct_openclaw",
+				mode: "xurl",
+				limit: 30,
+				delayMs: 1500,
+				timeoutMs: 15000,
+			}),
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			steps: [
+				{
+					kind: "mention-threads",
+					ok: false,
+					count: 0,
+					error: "xurl failed",
 				},
 			],
 		});
