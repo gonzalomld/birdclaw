@@ -175,6 +175,7 @@ export interface TimelineItem {
 	media: TweetMediaItem[];
 	replyToTweet?: EmbeddedTweet | null;
 	quotedTweet?: EmbeddedTweet | null;
+	retweetedTweet?: EmbeddedTweet | null;
 	qualityReason?: string | null;
 }
 

@@ -238,30 +238,55 @@ export function TimelineCard({
 						</span>
 					) : null}
 				</header>
-				<TweetRichText
-					className={feedRowTextClass}
-					entities={item.entities}
-					hiddenUrlRanges={hiddenMediaUrlRanges}
-					text={item.text}
-				/>
-				<TweetMediaGrid items={item.media} />
-				{item.replyToTweet ? (
-					<div className={embeddedCardClass}>
-						<EmbeddedTweetCard item={item.replyToTweet} label="In reply to" />
+				{item.retweetedTweet ? (
+					<div className="mt-2 space-y-2">
+						<div className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--ink-soft)]">
+							<Repeat2 className="size-4" strokeWidth={1.8} />
+							<ProfilePreview profile={item.author}>
+								<span>{item.author.displayName} reposted</span>
+							</ProfilePreview>
+						</div>
+						<div className={embeddedCardClass}>
+							<EmbeddedTweetCard
+								item={item.retweetedTweet}
+								label="Reposted tweet"
+							/>
+						</div>
 					</div>
-				) : null}
-				{item.quotedTweet ? (
-					<div className={embeddedCardClass}>
-						<EmbeddedTweetCard item={item.quotedTweet} label="Quoted tweet" />
-					</div>
-				) : null}
-				{getVisibleUrlCards(item, visibleEntities).map((entry, index) => (
-					<LinkPreviewCard
-						key={`${entry.expandedUrl}-${String(index)}`}
-						entry={entry}
-						index={index}
-					/>
-				))}
+				) : (
+					<>
+						<TweetRichText
+							className={feedRowTextClass}
+							entities={item.entities}
+							hiddenUrlRanges={hiddenMediaUrlRanges}
+							text={item.text}
+						/>
+						<TweetMediaGrid items={item.media} />
+						{item.replyToTweet ? (
+							<div className={embeddedCardClass}>
+								<EmbeddedTweetCard
+									item={item.replyToTweet}
+									label="In reply to"
+								/>
+							</div>
+						) : null}
+						{item.quotedTweet ? (
+							<div className={embeddedCardClass}>
+								<EmbeddedTweetCard
+									item={item.quotedTweet}
+									label="Quoted tweet"
+								/>
+							</div>
+						) : null}
+						{getVisibleUrlCards(item, visibleEntities).map((entry, index) => (
+							<LinkPreviewCard
+								key={`${entry.expandedUrl}-${String(index)}`}
+								entry={entry}
+								index={index}
+							/>
+						))}
+					</>
+				)}
 				<footer className={feedRowActionsClass}>
 					<div className="flex items-center gap-3 text-[13px] text-[var(--ink-soft)]">
 						<button

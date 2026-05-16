@@ -131,6 +131,46 @@ describe("TimelineCard", () => {
 		expect(onReply).toHaveBeenCalledWith("tweet_1");
 	});
 
+	it("renders retweets as the original tweet with repost attribution", () => {
+		render(
+			<TimelineCard
+				item={{
+					...item,
+					id: "tweet_rt",
+					text: "RT @ava: Original app idea",
+					entities: {},
+					media: [],
+					mediaCount: 0,
+					replyToTweet: null,
+					quotedTweet: null,
+					retweetedTweet: {
+						id: "tweet_original",
+						text: "Original app idea",
+						createdAt: "2026-03-08T11:55:00.000Z",
+						author: {
+							id: "profile_3",
+							handle: "ava",
+							displayName: "Ava",
+							bio: "Reporter",
+							followersCount: 400,
+							avatarHue: 120,
+							createdAt: "2026-03-08T09:00:00.000Z",
+						},
+						entities: {},
+						media: [],
+					},
+				}}
+				onReply={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByText("Sam Altman reposted")).toBeInTheDocument();
+		expect(screen.getByText("Reposted tweet")).toBeInTheDocument();
+		expect(screen.getByText("Original app idea")).toBeInTheDocument();
+		expect(screen.getAllByText("@ava").length).toBeGreaterThan(0);
+		expect(screen.queryByText(/RT @ava/)).not.toBeInTheDocument();
+	});
+
 	it("renders replied and unbookmarked state", () => {
 		render(
 			<TimelineCard

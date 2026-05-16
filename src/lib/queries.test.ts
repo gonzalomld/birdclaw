@@ -663,6 +663,16 @@ describe("birdclaw queries", () => {
 		const db = getNativeDb();
 		db.prepare(
 			`
+      insert into profiles (
+        id, handle, display_name, bio, followers_count, avatar_hue, created_at
+      ) values (
+        'profile_dimillian', 'Dimillian', 'Dominik Hauser', 'Mac and iOS apps',
+        42000, 210, '2026-03-01T00:00:00.000Z'
+      )
+      `,
+		).run();
+		db.prepare(
+			`
       insert into tweets (
         id, account_id, author_profile_id, kind, text, created_at,
         is_replied, reply_to_id, like_count, media_count, bookmarked, liked,
@@ -671,6 +681,58 @@ describe("birdclaw queries", () => {
         'tweet_raw_url', 'acct_primary', 'profile_me', 'home',
         'Check it: https://t.co/peek', '2026-03-09T12:00:00.000Z',
         0, null, 0, 0, 0, 0, '{}', '[]', null
+      )
+      `,
+		).run();
+		db.prepare(
+			`
+      insert into tweets (
+        id, account_id, author_profile_id, kind, text, created_at,
+        is_replied, reply_to_id, like_count, media_count, bookmarked, liked,
+        entities_json, media_json, quoted_tweet_id
+      ) values (
+        'tweet_raw_mention', 'acct_primary', 'profile_me', 'home',
+        '@Dimillian Any ideas for Mac apps?', '2026-03-09T12:01:00.000Z',
+        0, null, 0, 0, 0, 0, '{}', '[]', null
+      )
+      `,
+		).run();
+		db.prepare(
+			`
+      insert into tweets (
+        id, account_id, author_profile_id, kind, text, created_at,
+        is_replied, reply_to_id, like_count, media_count, bookmarked, liked,
+        entities_json, media_json, quoted_tweet_id
+      ) values (
+        'tweet_retweeted_original', 'acct_primary', 'profile_dimillian', 'thread',
+        'Actual original tweet content', '2026-03-09T11:59:00.000Z',
+        0, null, 19, 0, 0, 0, '{}', '[]', null
+      )
+      `,
+		).run();
+		db.prepare(
+			`
+      insert into tweets (
+        id, account_id, author_profile_id, kind, text, created_at,
+        is_replied, reply_to_id, like_count, media_count, bookmarked, liked,
+        entities_json, media_json, quoted_tweet_id
+      ) values (
+        'tweet_retweet_ref', 'acct_primary', 'profile_me', 'home',
+        'RT @Dimillian: Actual original tweet content', '2026-03-09T12:02:00.000Z',
+        0, null, 0, 0, 0, 0, '{}', '[]', null
+      )
+      `,
+		).run();
+		db.prepare(
+			`
+      insert into tweet_account_edges (
+        account_id, tweet_id, kind, first_seen_at, last_seen_at, seen_count,
+        source, raw_json, updated_at
+      ) values (
+        'acct_primary', 'tweet_retweet_ref', 'home', '2026-03-09T12:02:00.000Z',
+        '2026-03-09T12:02:00.000Z', 1, 'test',
+        '{"referenced_tweets":[{"type":"retweeted","id":"tweet_retweeted_original"}]}',
+        '2026-03-09T12:02:00.000Z'
       )
       `,
 		).run();
@@ -691,6 +753,10 @@ describe("birdclaw queries", () => {
 			limit: 10,
 		});
 		const rawUrlItem = items.find((item) => item.id === "tweet_raw_url");
+		const rawMentionItem = items.find(
+			(item) => item.id === "tweet_raw_mention",
+		);
+		const retweetItem = items.find((item) => item.id === "tweet_retweet_ref");
 		const replyItem = items.find((item) => item.id === "tweet_002");
 		const mediaItem = items.find((item) => item.id === "tweet_003");
 		const quotedItem = items.find((item) => item.id === "tweet_006");
@@ -701,6 +767,22 @@ describe("birdclaw queries", () => {
 			displayUrl: "peekaboo.boo",
 			title: "Peekaboo",
 			description: "Mac automation",
+		});
+		expect(rawMentionItem?.entities.mentions?.[0]).toMatchObject({
+			username: "Dimillian",
+			start: 0,
+			end: 10,
+			profile: {
+				handle: "Dimillian",
+				displayName: "Dominik Hauser",
+			},
+		});
+		expect(retweetItem?.retweetedTweet).toMatchObject({
+			id: "tweet_retweeted_original",
+			text: "Actual original tweet content",
+			author: {
+				handle: "Dimillian",
+			},
 		});
 		expect(replyItem?.replyToTweet?.id).toBe("tweet_001");
 		expect(mediaItem?.media[0]?.altText).toBe("Pricing survey chart");

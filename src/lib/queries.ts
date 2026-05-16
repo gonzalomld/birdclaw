@@ -95,6 +95,124 @@ function parseJsonField<T>(value: unknown, fallback: T): T {
 	}
 }
 
+function normalizeProfileHandle(handle: string) {
+	return handle.replace(/^@/, "").toLowerCase();
+}
+
+function avatarHueForHandle(handle: string) {
+	let hash = 0;
+	for (const character of handle) {
+		hash = (hash * 31 + character.charCodeAt(0)) % 360;
+	}
+	return hash;
+}
+
+function fallbackProfileForHandle(handle: string): ProfileRecord {
+	const normalized = normalizeProfileHandle(handle);
+	return {
+		id: `profile_handle_${normalized}`,
+		handle: normalized,
+		displayName: `@${normalized}`,
+		bio: "",
+		followersCount: 0,
+		avatarHue: avatarHueForHandle(normalized),
+		createdAt: new Date(0).toISOString(),
+	};
+}
+
+type ProfileByHandleCache = Map<string, ProfileRecord | null>;
+
+function getProfileByHandle(
+	db: Database,
+	cache: ProfileByHandleCache,
+	handle: string,
+	profiles: Record<string, ProfileRecord> = {},
+) {
+	const normalized = normalizeProfileHandle(handle);
+	const inlineProfile = Object.values(profiles).find(
+		(profile) => normalizeProfileHandle(profile.handle) === normalized,
+	);
+	if (inlineProfile) {
+		return inlineProfile;
+	}
+
+	if (cache.has(normalized)) {
+		return cache.get(normalized) ?? fallbackProfileForHandle(normalized);
+	}
+
+	const row = db
+		.prepare(
+			`
+      select *
+      from profiles
+      where lower(handle) = lower(?)
+      limit 1
+      `,
+		)
+		.get(normalized) as Record<string, unknown> | undefined;
+	const profile = row ? toProfile(row) : null;
+	cache.set(normalized, profile);
+	return profile ?? fallbackProfileForHandle(normalized);
+}
+
+function spansOverlap(
+	leftStart: number,
+	leftEnd: number,
+	rightStart: number,
+	rightEnd: number,
+) {
+	return leftStart < rightEnd && rightStart < leftEnd;
+}
+
+function enrichFallbackMentionEntities(
+	text: string,
+	entities: TweetEntities,
+	resolveProfileByHandle: (handle: string) => ProfileRecord,
+): TweetEntities {
+	const existingMentions = entities.mentions ?? [];
+	const occupied = [
+		...existingMentions,
+		...(entities.urls ?? []),
+		...(entities.hashtags ?? []),
+	].map((entry) => ({ start: entry.start, end: entry.end }));
+	const fallbackMentions = [];
+	const mentionPattern = /(^|[^\w@])@([A-Za-z0-9_]{1,15})/g;
+
+	for (const match of text.matchAll(mentionPattern)) {
+		const prefix = match[1] ?? "";
+		const username = match[2];
+		if (!username) continue;
+		const start = (match.index ?? 0) + prefix.length;
+		const end = start + username.length + 1;
+		if (
+			occupied.some((entry) => spansOverlap(start, end, entry.start, entry.end))
+		) {
+			continue;
+		}
+
+		const profile = resolveProfileByHandle(username);
+		fallbackMentions.push({
+			username,
+			id: profile.id,
+			start,
+			end,
+			profile,
+		});
+		occupied.push({ start, end });
+	}
+
+	if (fallbackMentions.length === 0) {
+		return entities;
+	}
+
+	return {
+		...entities,
+		mentions: [...existingMentions, ...fallbackMentions].sort(
+			(left, right) => left.start - right.start,
+		),
+	};
+}
+
 function toFtsSearchQuery(value: string) {
 	const terms = value.match(/[\p{L}\p{N}_]+/gu) ?? [];
 	return terms
@@ -107,13 +225,17 @@ function toFtsSearchQuery(value: string) {
 function enrichEntities(
 	entities: TweetEntities,
 	profiles: Record<string, ProfileRecord>,
+	resolveProfileByHandle?: (handle: string) => ProfileRecord,
 ): TweetEntities {
 	const mentions = entities.mentions?.map((mention) => {
 		const profile =
 			(mention.id ? profiles[mention.id] : undefined) ??
 			Object.values(profiles).find(
-				(candidate) => candidate.handle === mention.username,
-			);
+				(candidate) =>
+					normalizeProfileHandle(candidate.handle) ===
+					normalizeProfileHandle(mention.username),
+			) ??
+			resolveProfileByHandle?.(mention.username);
 		return profile ? { ...mention, profile } : mention;
 	});
 
@@ -184,12 +306,16 @@ function enrichTimelineEntities(
 	text: string,
 	entities: TweetEntities,
 	profiles: Record<string, ProfileRecord>,
+	resolveProfileByHandle?: (handle: string) => ProfileRecord,
 ): TweetEntities {
-	return enrichFallbackUrlEntities(
+	const withUrls = enrichFallbackUrlEntities(
 		text,
-		enrichEntities(entities, profiles),
+		enrichEntities(entities, profiles, resolveProfileByHandle),
 		(rawUrl) => getUrlExpansion(db, urlExpansionCache, rawUrl),
 	);
+	return resolveProfileByHandle
+		? enrichFallbackMentionEntities(text, withUrls, resolveProfileByHandle)
+		: withUrls;
 }
 
 function buildEmbeddedTweet(
@@ -197,6 +323,7 @@ function buildEmbeddedTweet(
 	urlExpansionCache: UrlExpansionCache,
 	row: Record<string, unknown>,
 	prefix: string,
+	resolveProfileByHandle?: (handle: string) => ProfileRecord,
 ): EmbeddedTweet | null {
 	if (!row[`${prefix}id`]) {
 		return null;
@@ -232,8 +359,103 @@ function buildEmbeddedTweet(
 			{
 				[author.id]: author,
 			},
+			resolveProfileByHandle,
 		),
 		media: parseJsonField<TweetMediaItem[]>(row[`${prefix}media_json`], []),
+	};
+}
+
+function getRetweetedTweetIdFromRaw(rawJson: unknown) {
+	const raw = parseJsonField<Record<string, unknown>>(rawJson, {});
+	const directCandidates = [
+		raw.retweeted_tweet_id,
+		raw.retweetedTweetId,
+		raw.retweetedStatusId,
+		raw.retweeted_status_id_str,
+	];
+	for (const candidate of directCandidates) {
+		if (typeof candidate === "string" && candidate.length > 0) {
+			return candidate;
+		}
+	}
+
+	const nestedCandidates = [raw.retweetedTweet, raw.retweeted_status];
+	for (const nested of nestedCandidates) {
+		if (nested && typeof nested === "object") {
+			const record = nested as Record<string, unknown>;
+			for (const key of ["id", "id_str"]) {
+				if (typeof record[key] === "string" && record[key].length > 0) {
+					return record[key];
+				}
+			}
+		}
+	}
+
+	const references = [raw.referenced_tweets, raw.referencedTweets].find(
+		(value): value is unknown[] => Array.isArray(value),
+	);
+	for (const reference of references ?? []) {
+		if (!reference || typeof reference !== "object") continue;
+		const record = reference as Record<string, unknown>;
+		if (record.type === "retweeted" && typeof record.id === "string") {
+			return record.id;
+		}
+	}
+
+	return null;
+}
+
+function parseManualRetweet(text: string) {
+	const match = text.match(/^RT\s+@([A-Za-z0-9_]{1,15}):\s*([\s\S]+)$/);
+	if (!match?.[1] || !match[2]) {
+		return null;
+	}
+	return {
+		handle: match[1],
+		text: match[2].trim(),
+	};
+}
+
+function buildRetweetedTweet(
+	db: Database,
+	urlExpansionCache: UrlExpansionCache,
+	row: Record<string, unknown>,
+	resolveProfileByHandle: (handle: string) => ProfileRecord,
+) {
+	const retweetedId = getRetweetedTweetIdFromRaw(row.edge_raw_json);
+	if (retweetedId) {
+		const tweet = getTweetById(
+			db,
+			urlExpansionCache,
+			retweetedId,
+			resolveProfileByHandle,
+		);
+		if (tweet) {
+			return tweet;
+		}
+	}
+
+	const manualRetweet = parseManualRetweet(String(row.text ?? ""));
+	if (!manualRetweet) {
+		return null;
+	}
+
+	const author = resolveProfileByHandle(manualRetweet.handle);
+	return {
+		id: retweetedId ?? `${String(row.id)}:retweeted`,
+		text: manualRetweet.text,
+		createdAt: String(row.created_at ?? new Date(0).toISOString()),
+		replyToId: null,
+		author,
+		entities: enrichTimelineEntities(
+			db,
+			urlExpansionCache,
+			manualRetweet.text,
+			{},
+			{ [author.id]: author },
+			resolveProfileByHandle,
+		),
+		media: [],
 	};
 }
 
@@ -495,11 +717,11 @@ export function listTimelineItems({
 		normalizeLowQualityThreshold(lowQualityThreshold);
 	let timelineEdgesCte = `
       with timeline_edges as (
-        select account_id, tweet_id, kind
+        select account_id, tweet_id, kind, raw_json
         from tweet_account_edges
         where kind = ?
         union all
-        select legacy.account_id, legacy.id as tweet_id, legacy.kind
+        select legacy.account_id, legacy.id as tweet_id, legacy.kind, '{}' as raw_json
         from tweets legacy
         where legacy.kind = ?
           and not exists (
@@ -532,7 +754,7 @@ export function listTimelineItems({
 		if (likedOnly && bookmarkedOnly) {
 			timelineEdgesCte = `
         with timeline_edges as (
-          select likes.account_id, likes.tweet_id, 'home' as kind
+          select likes.account_id, likes.tweet_id, 'home' as kind, likes.raw_json
           from tweet_collections likes
           join tweet_collections bookmarks
             on bookmarks.account_id = likes.account_id
@@ -540,7 +762,7 @@ export function listTimelineItems({
             and bookmarks.kind = 'bookmarks'
           where likes.kind = 'likes'
           union all
-          select legacy.account_id, legacy.id as tweet_id, 'home' as kind
+          select legacy.account_id, legacy.id as tweet_id, 'home' as kind, '{}' as raw_json
           from tweets legacy
           where legacy.liked = 1
             and legacy.bookmarked = 1
@@ -558,11 +780,11 @@ export function listTimelineItems({
 			const legacyColumn = likedOnly ? "liked" : "bookmarked";
 			timelineEdgesCte = `
         with timeline_edges as (
-          select account_id, tweet_id, 'home' as kind
+          select account_id, tweet_id, 'home' as kind, raw_json
           from tweet_collections
           where kind = ?
           union all
-          select legacy.account_id, legacy.id as tweet_id, 'home' as kind
+          select legacy.account_id, legacy.id as tweet_id, 'home' as kind, '{}' as raw_json
           from tweets legacy
           where legacy.${legacyColumn} = 1
             and not exists (
@@ -581,7 +803,7 @@ export function listTimelineItems({
 		usedRecentEdgeWindow = true;
 		timelineEdgesCte = `
       with timeline_edges as (
-        select account_id, tweet_id, kind
+        select account_id, tweet_id, kind, raw_json
         from tweet_account_edges
         where kind = ?
           and tweet_id in (
@@ -591,7 +813,7 @@ export function listTimelineItems({
             limit ?
           )
         union all
-        select legacy.account_id, legacy.id as tweet_id, legacy.kind
+        select legacy.account_id, legacy.id as tweet_id, legacy.kind, '{}' as raw_json
         from tweets legacy
         where legacy.kind = ?
           and legacy.id in (
@@ -670,6 +892,7 @@ export function listTimelineItems({
         e.account_id,
         a.handle as account_handle,
         e.kind,
+        e.raw_json as edge_raw_json,
         t.text,
         t.created_at,
         t.reply_to_id,
@@ -768,6 +991,7 @@ export function listTimelineItems({
 	}
 
 	const urlExpansionCache: UrlExpansionCache = new Map();
+	const profileByHandleCache: ProfileByHandleCache = new Map();
 	return rows.map((row) => {
 		const author = {
 			id: String(row.profile_id),
@@ -781,45 +1005,49 @@ export function listTimelineItems({
 				typeof row.avatar_url === "string" ? String(row.avatar_url) : undefined,
 			createdAt: String(row.profile_created_at),
 		};
+		const rowProfiles: Record<string, ProfileRecord> = {
+			[author.id]: author,
+			...(row.reply_profile_id
+				? {
+						[String(row.reply_profile_id)]: toProfile({
+							id: row.reply_profile_id,
+							handle: row.reply_handle,
+							display_name: row.reply_display_name,
+							bio: row.reply_bio,
+							followers_count: row.reply_followers_count,
+							following_count: row.reply_following_count,
+							avatar_hue: row.reply_avatar_hue,
+							avatar_url: row.reply_avatar_url,
+							created_at: row.reply_profile_created_at,
+						}),
+					}
+				: {}),
+			...(row.quoted_profile_id
+				? {
+						[String(row.quoted_profile_id)]: toProfile({
+							id: row.quoted_profile_id,
+							handle: row.quoted_handle,
+							display_name: row.quoted_display_name,
+							bio: row.quoted_bio,
+							followers_count: row.quoted_followers_count,
+							following_count: row.quoted_following_count,
+							avatar_hue: row.quoted_avatar_hue,
+							avatar_url: row.quoted_avatar_url,
+							created_at: row.quoted_profile_created_at,
+						}),
+					}
+				: {}),
+		};
+		const resolveProfileByHandle = (handle: string) =>
+			getProfileByHandle(db, profileByHandleCache, handle, rowProfiles);
 		const text = String(row.text);
 		const entities = enrichTimelineEntities(
 			db,
 			urlExpansionCache,
 			text,
 			parseJsonField<TweetEntities>(row.entities_json, {}),
-			{
-				[author.id]: author,
-				...(row.reply_profile_id
-					? {
-							[String(row.reply_profile_id)]: toProfile({
-								id: row.reply_profile_id,
-								handle: row.reply_handle,
-								display_name: row.reply_display_name,
-								bio: row.reply_bio,
-								followers_count: row.reply_followers_count,
-								following_count: row.reply_following_count,
-								avatar_hue: row.reply_avatar_hue,
-								avatar_url: row.reply_avatar_url,
-								created_at: row.reply_profile_created_at,
-							}),
-						}
-					: {}),
-				...(row.quoted_profile_id
-					? {
-							[String(row.quoted_profile_id)]: toProfile({
-								id: row.quoted_profile_id,
-								handle: row.quoted_handle,
-								display_name: row.quoted_display_name,
-								bio: row.quoted_bio,
-								followers_count: row.quoted_followers_count,
-								following_count: row.quoted_following_count,
-								avatar_hue: row.quoted_avatar_hue,
-								avatar_url: row.quoted_avatar_url,
-								created_at: row.quoted_profile_created_at,
-							}),
-						}
-					: {}),
-			},
+			rowProfiles,
+			resolveProfileByHandle,
 		);
 		const item = {
 			id: String(row.id),
@@ -841,8 +1069,26 @@ export function listTimelineItems({
 			author,
 			entities,
 			media: parseJsonField<TweetMediaItem[]>(row.media_json, []),
-			replyToTweet: buildEmbeddedTweet(db, urlExpansionCache, row, "reply_"),
-			quotedTweet: buildEmbeddedTweet(db, urlExpansionCache, row, "quoted_"),
+			replyToTweet: buildEmbeddedTweet(
+				db,
+				urlExpansionCache,
+				row,
+				"reply_",
+				resolveProfileByHandle,
+			),
+			quotedTweet: buildEmbeddedTweet(
+				db,
+				urlExpansionCache,
+				row,
+				"quoted_",
+				resolveProfileByHandle,
+			),
+			retweetedTweet: buildRetweetedTweet(
+				db,
+				urlExpansionCache,
+				row,
+				resolveProfileByHandle,
+			),
 		};
 		return includeQualityReason
 			? {
@@ -881,12 +1127,19 @@ function getTweetById(
 	db: Database,
 	urlExpansionCache: UrlExpansionCache,
 	tweetId: string,
+	resolveProfileByHandle?: (handle: string) => ProfileRecord,
 ): EmbeddedTweet | null {
 	const row = db
 		.prepare(`${conversationTweetSelect} where t.id = ?`)
 		.get(tweetId) as Record<string, unknown> | undefined;
 	if (!row) return null;
-	return buildEmbeddedTweet(db, urlExpansionCache, row, "");
+	return buildEmbeddedTweet(
+		db,
+		urlExpansionCache,
+		row,
+		"",
+		resolveProfileByHandle,
+	);
 }
 
 function listTweetDescendants(
@@ -894,6 +1147,7 @@ function listTweetDescendants(
 	urlExpansionCache: UrlExpansionCache,
 	rootId: string,
 	limit: number,
+	resolveProfileByHandle?: (handle: string) => ProfileRecord,
 ) {
 	if (limit <= 0) return [];
 	const rows = db
@@ -919,7 +1173,15 @@ function listTweetDescendants(
 		.all(rootId, rootId, limit) as Array<Record<string, unknown>>;
 
 	return rows
-		.map((row) => buildEmbeddedTweet(db, urlExpansionCache, row, ""))
+		.map((row) =>
+			buildEmbeddedTweet(
+				db,
+				urlExpansionCache,
+				row,
+				"",
+				resolveProfileByHandle,
+			),
+		)
 		.filter((tweet): tweet is EmbeddedTweet => Boolean(tweet));
 }
 
@@ -942,13 +1204,26 @@ export function getTweetConversation(
 ): TweetConversationResponse | null {
 	const db = getNativeDb();
 	const urlExpansionCache: UrlExpansionCache = new Map();
-	const anchor = getTweetById(db, urlExpansionCache, tweetId);
+	const profileByHandleCache: ProfileByHandleCache = new Map();
+	const resolveProfileByHandle = (handle: string) =>
+		getProfileByHandle(db, profileByHandleCache, handle);
+	const anchor = getTweetById(
+		db,
+		urlExpansionCache,
+		tweetId,
+		resolveProfileByHandle,
+	);
 	if (!anchor) return null;
 
 	const ancestors: EmbeddedTweet[] = [];
 	let current = anchor;
 	for (let depth = 0; depth < 12 && current.replyToId; depth += 1) {
-		const parent = getTweetById(db, urlExpansionCache, current.replyToId);
+		const parent = getTweetById(
+			db,
+			urlExpansionCache,
+			current.replyToId,
+			resolveProfileByHandle,
+		);
 		if (!parent || ancestors.some((tweet) => tweet.id === parent.id)) break;
 		ancestors.push(parent);
 		current = parent;
@@ -969,6 +1244,7 @@ export function getTweetConversation(
 		urlExpansionCache,
 		anchor.id,
 		remainingAfterRequired,
+		resolveProfileByHandle,
 	);
 	appendConversationTweets(items, seen, focusedDescendants, limit);
 
@@ -978,6 +1254,7 @@ export function getTweetConversation(
 			urlExpansionCache,
 			root.id,
 			limit,
+			resolveProfileByHandle,
 		);
 		appendConversationTweets(items, seen, ambientDescendants, limit);
 	}

@@ -39,7 +39,9 @@ interface BirdTweetItem {
 	conversationId?: string;
 	inReplyToStatusId?: string | null;
 	quotedStatusId?: string | null;
+	retweetedStatusId?: string | null;
 	quotedTweet?: { id?: string | null } | null;
+	retweetedTweet?: { id?: string | null } | null;
 	author?: BirdTweetAuthor;
 	authorId?: string;
 	media?: BirdTweetMedia[];
@@ -330,6 +332,16 @@ function toReferencedTweets(item: BirdTweetItem) {
 				: null;
 	if (quotedTweetId) {
 		references.push({ type: "quoted", id: quotedTweetId });
+	}
+
+	const retweetedTweetId =
+		typeof item.retweetedStatusId === "string" && item.retweetedStatusId
+			? item.retweetedStatusId
+			: typeof item.retweetedTweet?.id === "string" && item.retweetedTweet.id
+				? item.retweetedTweet.id
+				: null;
+	if (retweetedTweetId) {
+		references.push({ type: "retweeted", id: retweetedTweetId });
 	}
 
 	return references.length > 0 ? references : undefined;
