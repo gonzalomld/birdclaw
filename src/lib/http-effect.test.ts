@@ -15,6 +15,16 @@ describe("http Effect helpers", () => {
 		await expect(response.json()).resolves.toEqual({ ok: true });
 	});
 
+	it("preserves Headers instances passed through ResponseInit", () => {
+		const response = jsonResponse(
+			{ ok: true },
+			{ headers: new Headers({ "cache-control": "no-store" }) },
+		);
+
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("content-type")).toBe("application/json");
+	});
+
 	it("parses request JSON through an Effect boundary", async () => {
 		await expect(
 			runRouteEffect(

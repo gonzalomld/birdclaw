@@ -404,6 +404,20 @@ describe("web sync dispatcher", () => {
 		});
 	});
 
+	it("keeps non-Error background failure messages in job snapshots", async () => {
+		syncHomeTimelineMock.mockRejectedValue("rate limited");
+
+		const job = startWebSync("timeline");
+
+		await vi.waitFor(() => {
+			expect(getWebSyncJob(job.id)).toMatchObject({
+				status: "failed",
+				summary: "rate limited",
+				error: "rate limited",
+			});
+		});
+	});
+
 	it("expires completed background sync jobs after the polling window", async () => {
 		vi.useFakeTimers();
 		syncHomeTimelineMock.mockResolvedValue({

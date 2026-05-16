@@ -2,12 +2,11 @@ import { Effect } from "effect";
 import { runEffectPromise, tryPromise } from "./effect-runtime";
 
 export function jsonResponse(data: unknown, init?: ResponseInit) {
+	const headers = new Headers(init?.headers);
+	headers.set("content-type", "application/json");
 	return new Response(JSON.stringify(data), {
 		...init,
-		headers: {
-			"content-type": "application/json",
-			...init?.headers,
-		},
+		headers,
 	});
 }
 

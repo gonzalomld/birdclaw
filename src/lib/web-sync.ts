@@ -95,6 +95,10 @@ function readBoolean(value: unknown, key: string) {
 	return typeof raw === "boolean" ? raw : undefined;
 }
 
+function messageFromError(error: unknown) {
+	return error instanceof Error ? error.message : String(error);
+}
+
 export function parseWebSyncKind(value: unknown): WebSyncKind | null {
 	return value === "timeline" ||
 		value === "mentions" ||
@@ -332,7 +336,7 @@ function toFailedResponse(
 	accountId?: string,
 ): WebSyncResponse {
 	const finishedAt = new Date().toISOString();
-	const message = error instanceof Error ? error.message : "Sync failed";
+	const message = messageFromError(error);
 	return {
 		ok: false,
 		kind,

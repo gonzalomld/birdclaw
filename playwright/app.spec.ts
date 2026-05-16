@@ -4,9 +4,7 @@ test("navigates across the primary surfaces", async ({ page }) => {
 	await page.goto("/");
 
 	await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
-	await expect(
-		page.getByText("Fast search for your Twitter archive."),
-	).toBeVisible();
+	await expect(page.getByText("Fast search for your archive.")).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Sync timeline" }),
 	).toBeVisible();
