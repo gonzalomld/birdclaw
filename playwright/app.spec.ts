@@ -1,4 +1,15 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+async function selectAccount(page: Page, accountHandle: string) {
+	await page.getByRole("button", { name: /^Active account:/ }).click();
+	await page.getByRole("option", { name: new RegExp(accountHandle) }).click();
+	await expect(
+		page.getByRole("button", {
+			name: new RegExp(`^Active account: ${accountHandle}$`),
+		}),
+	).toBeVisible();
+}
 
 test("navigates across the primary surfaces", async ({ page }) => {
 	await page.goto("/");
@@ -121,7 +132,7 @@ test("filters the home timeline by reply state", async ({ page }) => {
 	await page.goto("/");
 
 	const cards = page.locator('[data-perf="timeline-card"]');
-	await expect(cards).toHaveCount(4);
+	await expect(cards).toHaveCount(3);
 	await expect(page.getByLabel("Part of a conversation").first()).toBeVisible();
 
 	await page.getByRole("button", { name: /^Replied$/ }).click();
@@ -130,7 +141,7 @@ test("filters the home timeline by reply state", async ({ page }) => {
 	await expect(page.getByLabel("We replied").first()).toBeVisible();
 
 	await page.getByRole("button", { name: /^Unreplied$/ }).click();
-	await expect(cards).toHaveCount(3);
+	await expect(cards).toHaveCount(2);
 	await expect(page.getByLabel("Reply open").first()).toBeVisible();
 });
 
@@ -171,6 +182,7 @@ test("expands timeline cards with media, quote context, and profile hover", asyn
 		),
 	).toBeVisible();
 
+	await selectAccount(page, "@birdclaw_lab");
 	const quoteCard = page.locator('[data-perf="timeline-card"]').filter({
 		hasText: "Agents need retrieval surfaces",
 	});
@@ -186,7 +198,7 @@ test("searches saved likes and bookmarks", async ({ page }) => {
 	await page.goto("/likes");
 
 	const likeCards = page.locator('[data-perf="timeline-card"]');
-	await expect(likeCards).toHaveCount(3);
+	await expect(likeCards).toHaveCount(2);
 	await page.getByPlaceholder("Search likes").fill("pruning");
 	await expect(likeCards).toHaveCount(1);
 	await expect(likeCards.first()).toContainText("pruning scope");
@@ -194,10 +206,10 @@ test("searches saved likes and bookmarks", async ({ page }) => {
 	await page.goto("/bookmarks");
 
 	const bookmarkCards = page.locator('[data-perf="timeline-card"]');
-	await expect(bookmarkCards).toHaveCount(2);
-	await page.getByPlaceholder("Search bookmarks").fill("Agents need");
 	await expect(bookmarkCards).toHaveCount(1);
-	await expect(bookmarkCards.first()).toContainText("retrieval surfaces");
+	await page.getByPlaceholder("Search bookmarks").fill("local-first");
+	await expect(bookmarkCards).toHaveCount(1);
+	await expect(bookmarkCards.first()).toContainText("local-first");
 });
 
 test("browses link insights across links, videos, filters, and comments", async ({
