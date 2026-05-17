@@ -2,6 +2,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetBirdclawPathsForTests } from "./config";
@@ -90,6 +91,133 @@ describe("link preview metadata", () => {
 			siteName: "example.com",
 			title: "example.com",
 		});
+	});
+
+	it("blocks local and private link preview targets before fetching", async () => {
+		const fetchImpl = vi.fn();
+
+		await expect(
+			fetchLinkPreviewMetadata("http://127.0.0.1/admin", { fetchImpl }),
+		).resolves.toMatchObject({
+			error: "Link preview URL points to a private host",
+		});
+		await expect(
+			fetchLinkPreviewMetadata("http://localhost:3000/", { fetchImpl }),
+		).resolves.toMatchObject({
+			error: "Link preview URL points to a private host",
+		});
+		await expect(
+			fetchLinkPreviewMetadata("http://[::1]/", { fetchImpl }),
+		).resolves.toMatchObject({
+			error: "Link preview URL points to a private host",
+		});
+		await expect(
+			fetchLinkPreviewMetadata("http://[::ffff:127.0.0.1]/", { fetchImpl }),
+		).resolves.toMatchObject({
+			error: "Link preview URL points to a private host",
+		});
+		expect(fetchImpl).not.toHaveBeenCalled();
+		expect(__test__.isBlockedAddress("10.0.0.5")).toBe(true);
+		expect(__test__.isBlockedAddress("[::ffff:7f00:1]")).toBe(true);
+		expect(__test__.isBlockedAddress("0:0:0:0:0:0:0:1")).toBe(true);
+		expect(__test__.isBlockedAddress("0:0:0:0:0:ffff:7f00:1")).toBe(true);
+		expect(__test__.isBlockedAddress("[::ffff:0:7f00:1]")).toBe(true);
+		expect(__test__.isBlockedAddress("[::7f00:1]")).toBe(true);
+		expect(__test__.isBlockedAddress("[64:ff9b::7f00:1]")).toBe(true);
+		expect(__test__.isBlockedAddress("fec0::1")).toBe(true);
+		expect(__test__.isBlockedAddress("8.8.8.8")).toBe(false);
+	});
+
+	it("answers Node lookup callbacks in all-address mode", () => {
+		const callback = vi.fn();
+
+		__test__.respondWithResolvedAddress(
+			{ address: "93.184.216.34", family: 4 },
+			{ all: true },
+			callback,
+		);
+
+		expect(callback).toHaveBeenCalledWith(null, [
+			{ address: "93.184.216.34", family: 4 },
+		]);
+	});
+
+	it("blocks DNS resolutions and redirects to private addresses", async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response("", {
+					status: 302,
+					headers: { location: "http://internal.example.test/admin" },
+				}),
+			)
+			.mockResolvedValueOnce(new Response("<title>private</title>"));
+		const resolveHost = vi.fn(async (hostname: string) =>
+			hostname === "example.com" ? ["93.184.216.34"] : ["10.0.0.8"],
+		);
+
+		await expect(
+			fetchLinkPreviewMetadata("https://example.com/", {
+				fetchImpl,
+				resolveHost,
+			}),
+		).resolves.toMatchObject({
+			error: "Link preview URL points to a private host",
+		});
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(resolveHost).toHaveBeenCalledWith("example.com");
+	});
+
+	it("caps oversized link preview bodies", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			new Response("too much", {
+				headers: {
+					"content-length": "2000001",
+					"content-type": "text/html",
+				},
+			}),
+		);
+
+		await expect(
+			fetchLinkPreviewMetadata("https://example.com/", { fetchImpl }),
+		).resolves.toMatchObject({
+			error: "Link preview response is too large",
+		});
+	});
+
+	it("decodes compressed link preview bodies", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			new Response(gzipSync("<title>Compressed</title>"), {
+				headers: {
+					"content-encoding": "gzip",
+					"content-type": "text/html",
+				},
+			}),
+		);
+
+		await expect(
+			fetchLinkPreviewMetadata("https://example.com/", { fetchImpl }),
+		).resolves.toMatchObject({
+			title: "Compressed",
+		});
+	});
+
+	it("returns preview errors for malformed redirects", async () => {
+		const cancel = vi.fn();
+		const fetchImpl = vi.fn().mockResolvedValue(
+			new Response(new ReadableStream({ cancel }), {
+				status: 302,
+				headers: { location: "http://[" },
+			}),
+		);
+
+		await expect(
+			fetchLinkPreviewMetadata("https://example.com/", { fetchImpl }),
+		).resolves.toMatchObject({
+			error: "Invalid URL",
+		});
+		expect(cancel).toHaveBeenCalledOnce();
 	});
 
 	it("keeps link preview fetch effects lazy", async () => {
