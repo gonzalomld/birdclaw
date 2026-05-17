@@ -83,6 +83,76 @@ describe("SyncNowButton", () => {
 		).toHaveAttribute("aria-label", "Sync timeline");
 	});
 
+	it("waits for an account before account-scoped syncs", () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		render(
+			<SyncNowButton
+				kind="bookmarks"
+				label="Sync bookmarks"
+				onSynced={vi.fn()}
+			/>,
+		);
+
+		const button = screen.getByRole("button", { name: "Sync bookmarks" });
+		expect(button).toBeDisabled();
+		fireEvent.click(button);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("allows account-scoped syncs after an empty account list loads", async () => {
+		const fetchMock = vi.fn(
+			async (_input: RequestInfo | URL, init?: RequestInit) => {
+				const body = JSON.parse(String(init?.body)) as {
+					kind: string;
+					accountId?: string;
+				};
+				return new Response(
+					JSON.stringify({
+						id: "sync_bookmarks_1",
+						kind: body.kind,
+						accountId: body.accountId,
+						status: "succeeded",
+						startedAt: "2026-05-15T12:00:00.000Z",
+						summary: "Synced 5 items",
+						inProgress: false,
+						result: {
+							ok: true,
+							kind: body.kind,
+							accountId: body.accountId,
+							summary: "Synced 5 items",
+							steps: [],
+						},
+					}),
+				);
+			},
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		render(
+			<SyncNowButton
+				accounts={[]}
+				kind="bookmarks"
+				label="Sync bookmarks"
+				onSynced={vi.fn()}
+			/>,
+		);
+
+		const button = screen.getByRole("button", { name: "Sync bookmarks" });
+		expect(button).toBeEnabled();
+		fireEvent.click(button);
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/sync",
+				expect.objectContaining({
+					body: JSON.stringify({ kind: "bookmarks" }),
+				}),
+			);
+		});
+	});
+
 	it("posts the selected account id when multiple accounts are available", async () => {
 		const fetchMock = vi.fn(
 			async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -369,13 +439,13 @@ describe("SyncNowButton", () => {
 
 		render(
 			<SyncNowButton
-				kind="mentions"
-				label="Sync mentions"
+				kind="timeline"
+				label="Sync timeline"
 				onSynced={vi.fn()}
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "Sync mentions" }));
+		fireEvent.click(screen.getByRole("button", { name: "Sync timeline" }));
 
 		expect(await screen.findByText("Rate limited")).toBeInTheDocument();
 	});

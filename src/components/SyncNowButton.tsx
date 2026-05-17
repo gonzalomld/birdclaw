@@ -21,13 +21,14 @@ interface SyncNowButtonProps {
 export function SyncNowButton({
 	kind,
 	label,
-	accounts = [],
+	accounts,
 	onSynced,
 	showAccountPicker = false,
 }: SyncNowButtonProps) {
 	const [syncing, setSyncing] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const accountList = accounts ?? [];
 	const globalAccountId = useSelectedAccountId(accounts);
 	const defaultAccountId = useMemo(
 		() => getDefaultAccountId(accounts),
@@ -35,15 +36,18 @@ export function SyncNowButton({
 	);
 	const accountId = globalAccountId ?? defaultAccountId;
 	const accountAwareSync = kind !== "timeline" && kind !== "dms";
+	const waitingForAccount = accountAwareSync && accounts === undefined;
 	const birdOnlyWrongAccount =
 		!accountAwareSync &&
 		accountId !== undefined &&
 		defaultAccountId !== undefined &&
 		accountId !== defaultAccountId;
-	const disabled = syncing || birdOnlyWrongAccount;
+	const disabled = syncing || waitingForAccount || birdOnlyWrongAccount;
 	const statusMessage = birdOnlyWrongAccount
 		? "Switch to default to sync"
-		: (error ?? message ?? "");
+		: waitingForAccount
+			? "Loading account"
+			: (error ?? message ?? "");
 
 	function selectAccount(accountId: string) {
 		setStoredAccountId(accountId);
@@ -70,7 +74,7 @@ export function SyncNowButton({
 
 	return (
 		<div className="flex shrink-0 items-center gap-2">
-			{showAccountPicker && accountAwareSync && accounts.length > 1 ? (
+			{showAccountPicker && accountAwareSync && accountList.length > 1 ? (
 				<select
 					aria-label="Sync account"
 					className={cx(selectFieldClass, "h-9 w-[132px]")}
@@ -78,7 +82,7 @@ export function SyncNowButton({
 					onChange={(event) => selectAccount(event.target.value)}
 					value={accountId ?? ""}
 				>
-					{accounts.map((account) => (
+					{accountList.map((account) => (
 						<option key={account.id} value={account.id}>
 							{account.handle}
 						</option>
