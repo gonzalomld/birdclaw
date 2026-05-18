@@ -188,13 +188,28 @@ describe("today route", () => {
 	it("shows request errors", async () => {
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => new Response("", { status: 500 })),
+			vi.fn(
+				async () =>
+					new Response(
+						JSON.stringify({
+							ok: false,
+							message:
+								"Remote API access requires BIRDCLAW_ALLOW_REMOTE_WEB=1 for a trusted private proxy, or BIRDCLAW_WEB_TOKEN for tokened access",
+						}),
+						{
+							headers: { "content-type": "application/json" },
+							status: 403,
+						},
+					),
+			),
 		);
 
 		render(<TodayRoute />);
 
 		expect(
-			await screen.findByText("Digest request failed: 500"),
+			await screen.findByText(
+				"Digest request failed (403): Remote API access requires BIRDCLAW_ALLOW_REMOTE_WEB=1 for a trusted private proxy, or BIRDCLAW_WEB_TOKEN for tokened access",
+			),
 		).toBeInTheDocument();
 	});
 

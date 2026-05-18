@@ -718,9 +718,10 @@ Flags:
 - `--no-sync`
 
 `birdclaw serve` binds the dev server to `127.0.0.1` and enables local
-loopback web APIs without a token. Remote web access requires
-`BIRDCLAW_WEB_TOKEN` plus `BIRDCLAW_ALLOW_REMOTE_WEB=1`; send the token as
-`x-birdclaw-token` or a `birdclaw_token` cookie.
+loopback web APIs without a token. Remote access through a trusted private proxy
+requires `BIRDCLAW_ALLOW_REMOTE_WEB=1`. To require an app-level token too, set
+`BIRDCLAW_WEB_TOKEN` and send it as `x-birdclaw-token` or a `birdclaw_token`
+cookie.
 
 ### `graph summary`
 

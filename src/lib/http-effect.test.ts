@@ -142,7 +142,7 @@ describe("http Effect helpers", () => {
 
 			expect(response?.status).toBe(403);
 			await expect(response?.json()).resolves.toMatchObject({
-				message: "BIRDCLAW_WEB_TOKEN is required for remote web API access",
+				message: expect.stringContaining("Remote API access requires"),
 			});
 		} finally {
 			if (originalNodeEnv === undefined) {
@@ -190,7 +190,7 @@ describe("http Effect helpers", () => {
 
 			expect(response?.status).toBe(403);
 			await expect(response?.json()).resolves.toMatchObject({
-				message: "BIRDCLAW_WEB_TOKEN is required for remote web API access",
+				message: expect.stringContaining("Remote API access requires"),
 			});
 		} finally {
 			if (originalNodeEnv === undefined) {
@@ -216,7 +216,7 @@ describe("http Effect helpers", () => {
 		}
 	});
 
-	it("requires a web token for remote sensitive API requests outside tests", async () => {
+	it("requires remote web opt-in for remote sensitive API requests outside tests", async () => {
 		const originalNodeEnv = process.env.NODE_ENV;
 		const originalVitest = process.env.VITEST;
 		const originalToken = process.env.BIRDCLAW_WEB_TOKEN;
@@ -231,7 +231,7 @@ describe("http Effect helpers", () => {
 
 			expect(response?.status).toBe(403);
 			await expect(response?.json()).resolves.toMatchObject({
-				message: "BIRDCLAW_WEB_TOKEN is required for remote web API access",
+				message: expect.stringContaining("Remote API access requires"),
 			});
 		} finally {
 			if (originalNodeEnv === undefined) {
@@ -248,6 +248,142 @@ describe("http Effect helpers", () => {
 				delete process.env.BIRDCLAW_WEB_TOKEN;
 			} else {
 				process.env.BIRDCLAW_WEB_TOKEN = originalToken;
+			}
+		}
+	});
+
+	it("accepts trusted remote private-proxy requests without a token", () => {
+		const originalNodeEnv = process.env.NODE_ENV;
+		const originalVitest = process.env.VITEST;
+		const originalToken = process.env.BIRDCLAW_WEB_TOKEN;
+		const originalAllowRemote = process.env.BIRDCLAW_ALLOW_REMOTE_WEB;
+		const originalLocalWeb = process.env.BIRDCLAW_LOCAL_WEB;
+		delete process.env.VITEST;
+		process.env.NODE_ENV = "production";
+		delete process.env.BIRDCLAW_WEB_TOKEN;
+		process.env.BIRDCLAW_ALLOW_REMOTE_WEB = "1";
+		delete process.env.BIRDCLAW_LOCAL_WEB;
+
+		try {
+			expect(
+				sensitiveRequestErrorResponse(
+					new Request("http://clawmac.sheep-coho.ts.net/api/action", {
+						headers: {
+							"sec-fetch-site": "same-origin",
+							"x-forwarded-host": "clawmac.sheep-coho.ts.net",
+							"x-forwarded-proto": "https",
+						},
+					}),
+				),
+			).toBeNull();
+			expect(
+				sensitiveRequestErrorResponse(
+					new Request("http://clawmac.sheep-coho.ts.net/api/action", {
+						headers: {
+							"x-forwarded-host": "clawmac.sheep-coho.ts.net",
+							"x-forwarded-proto": "https",
+						},
+					}),
+				),
+			).toBeNull();
+			expect(
+				sensitiveRequestErrorResponse(
+					new Request("http://clawmac.sheep-coho.ts.net/api/action", {
+						headers: { "sec-fetch-site": "cross-site" },
+					}),
+				)?.status,
+			).toBe(403);
+		} finally {
+			if (originalNodeEnv === undefined) {
+				delete process.env.NODE_ENV;
+			} else {
+				process.env.NODE_ENV = originalNodeEnv;
+			}
+			if (originalVitest === undefined) {
+				delete process.env.VITEST;
+			} else {
+				process.env.VITEST = originalVitest;
+			}
+			if (originalToken === undefined) {
+				delete process.env.BIRDCLAW_WEB_TOKEN;
+			} else {
+				process.env.BIRDCLAW_WEB_TOKEN = originalToken;
+			}
+			if (originalAllowRemote === undefined) {
+				delete process.env.BIRDCLAW_ALLOW_REMOTE_WEB;
+			} else {
+				process.env.BIRDCLAW_ALLOW_REMOTE_WEB = originalAllowRemote;
+			}
+			if (originalLocalWeb === undefined) {
+				delete process.env.BIRDCLAW_LOCAL_WEB;
+			} else {
+				process.env.BIRDCLAW_LOCAL_WEB = originalLocalWeb;
+			}
+		}
+	});
+
+	it("requires configured remote tokens even with trusted remote web enabled", () => {
+		const originalNodeEnv = process.env.NODE_ENV;
+		const originalVitest = process.env.VITEST;
+		const originalToken = process.env.BIRDCLAW_WEB_TOKEN;
+		const originalAllowRemote = process.env.BIRDCLAW_ALLOW_REMOTE_WEB;
+		const originalLocalWeb = process.env.BIRDCLAW_LOCAL_WEB;
+		delete process.env.VITEST;
+		process.env.NODE_ENV = "production";
+		process.env.BIRDCLAW_WEB_TOKEN = "secret";
+		process.env.BIRDCLAW_ALLOW_REMOTE_WEB = "1";
+		delete process.env.BIRDCLAW_LOCAL_WEB;
+
+		try {
+			expect(
+				sensitiveRequestErrorResponse(
+					new Request("http://clawmac.sheep-coho.ts.net/api/action", {
+						headers: { "sec-fetch-site": "same-origin" },
+					}),
+				)?.status,
+			).toBe(403);
+			expect(
+				sensitiveRequestErrorResponse(
+					new Request("http://clawmac.sheep-coho.ts.net/api/action", {
+						headers: {
+							"sec-fetch-site": "same-origin",
+							"x-birdclaw-token": "wrong",
+						},
+					}),
+				)?.status,
+			).toBe(403);
+			expect(
+				sensitiveRequestErrorResponse(
+					new Request("http://clawmac.sheep-coho.ts.net/api/action", {
+						headers: { "x-birdclaw-token": "secret" },
+					}),
+				),
+			).toBeNull();
+		} finally {
+			if (originalNodeEnv === undefined) {
+				delete process.env.NODE_ENV;
+			} else {
+				process.env.NODE_ENV = originalNodeEnv;
+			}
+			if (originalVitest === undefined) {
+				delete process.env.VITEST;
+			} else {
+				process.env.VITEST = originalVitest;
+			}
+			if (originalToken === undefined) {
+				delete process.env.BIRDCLAW_WEB_TOKEN;
+			} else {
+				process.env.BIRDCLAW_WEB_TOKEN = originalToken;
+			}
+			if (originalAllowRemote === undefined) {
+				delete process.env.BIRDCLAW_ALLOW_REMOTE_WEB;
+			} else {
+				process.env.BIRDCLAW_ALLOW_REMOTE_WEB = originalAllowRemote;
+			}
+			if (originalLocalWeb === undefined) {
+				delete process.env.BIRDCLAW_LOCAL_WEB;
+			} else {
+				process.env.BIRDCLAW_LOCAL_WEB = originalLocalWeb;
 			}
 		}
 	});

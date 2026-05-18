@@ -59,6 +59,31 @@ function digestUrl(
 	return url;
 }
 
+async function digestRequestError(response: Response) {
+	const status = `${String(response.status)}${response.statusText ? ` ${response.statusText}` : ""}`;
+	let detail = "";
+	try {
+		const contentType = response.headers.get("content-type") ?? "";
+		if (contentType.includes("application/json")) {
+			const payload = (await response.json()) as {
+				error?: unknown;
+				message?: unknown;
+			};
+			if (typeof payload.message === "string") detail = payload.message;
+			else if (typeof payload.error === "string") detail = payload.error;
+		} else {
+			detail = (await response.text()).trim();
+		}
+	} catch {
+		detail = "";
+	}
+	return new Error(
+		detail
+			? `Digest request failed (${status}): ${detail}`
+			: `Digest request failed (${status})`,
+	);
+}
+
 function formatCounts(result: PeriodDigestRunResult | null) {
 	if (!result) return "Local Twitter memory, summarized as it streams.";
 	const counts = result.context.counts;
@@ -101,11 +126,12 @@ function useDigestStream(period: PeriodOption, includeDms: boolean) {
 			fetch(digestUrl(period, includeDms, refresh), {
 				signal: controller.signal,
 			})
-				.then((response) => {
-					if (!response.ok || !response.body) {
-						throw new Error(
-							`Digest request failed: ${String(response.status)}`,
-						);
+				.then(async (response) => {
+					if (!response.ok) {
+						throw await digestRequestError(response);
+					}
+					if (!response.body) {
+						throw new Error("Digest request failed: empty response body");
 					}
 					const reader = response.body.getReader();
 					const decoder = new TextDecoder();

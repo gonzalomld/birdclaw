@@ -139,6 +139,8 @@ export function sensitiveRequestErrorResponse(request: Request) {
 		!hasForwardedRequestHeaders(request);
 	const fetchSite = request.headers.get("sec-fetch-site");
 	const origin = request.headers.get("origin");
+	const allowRemoteEnv = process.env.BIRDCLAW_ALLOW_REMOTE_WEB === "1";
+	const allowTrustedRemote = allowRemoteEnv && !token.configured;
 
 	if (isTestEnvironment() && !token.valid) return null;
 
@@ -156,25 +158,30 @@ export function sensitiveRequestErrorResponse(request: Request) {
 		);
 	}
 
-	if (!isTestEnvironment() && !token.configured && !isLocalRequest) {
+	if (
+		!isTestEnvironment() &&
+		!token.configured &&
+		!isLocalRequest &&
+		!allowTrustedRemote
+	) {
 		return jsonResponse(
 			{
 				ok: false,
-				message: "BIRDCLAW_WEB_TOKEN is required for remote web API access",
+				message:
+					"Remote API access requires BIRDCLAW_ALLOW_REMOTE_WEB=1 for a trusted private proxy, or BIRDCLAW_WEB_TOKEN for tokened access",
 			},
 			{ status: 403 },
 		);
 	}
 
-	if (token.configured && !token.valid && (!isLocalRequest || token.provided)) {
+	if (token.configured && !token.valid && (token.provided || !isLocalRequest)) {
 		return jsonResponse(
 			{ ok: false, message: "Invalid web token" },
 			{ status: 403 },
 		);
 	}
 
-	const allowRemote =
-		process.env.BIRDCLAW_ALLOW_REMOTE_WEB === "1" && token.valid;
+	const allowRemote = allowRemoteEnv && (token.valid || allowTrustedRemote);
 	if (!allowRemote && !isLocalRequest) {
 		return jsonResponse(
 			{ ok: false, message: "Remote web API access is disabled" },

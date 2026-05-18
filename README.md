@@ -264,9 +264,10 @@ birdclaw serve
 ```
 
 `birdclaw serve` binds the dev server to `127.0.0.1` and enables local
-loopback web APIs without a token. Remote web access requires
-`BIRDCLAW_WEB_TOKEN` plus `BIRDCLAW_ALLOW_REMOTE_WEB=1`; send the token as
-`x-birdclaw-token` or a `birdclaw_token` cookie.
+loopback web APIs without a token. Remote access through a trusted private proxy
+requires `BIRDCLAW_ALLOW_REMOTE_WEB=1`. To require an app-level token too, set
+`BIRDCLAW_WEB_TOKEN` and send it as `x-birdclaw-token` or a `birdclaw_token`
+cookie.
 
 Use the Sync button in Home, Mentions, Likes, Bookmarks, or DMs to run the matching live sync from the web UI and then reload the local view. These controls are explicit because live reads can be slow, auth-dependent, or rate-limited.
 

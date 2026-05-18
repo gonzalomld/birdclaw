@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Allow trusted private-proxy web deployments to stream the AI digest remotely without a token, while keeping app-level token enforcement when configured and surfacing API error details in the Today view.
 - Harden web write/quota endpoints, URL/avatar fetching, backup imports, archive replacement imports, block sync pruning, and GitHub workflows based on a deepsec security pass.
 - Validate compose, tweet-reply, and DM-reply writes before live transport, reject failed xurl sends without leaving local ghost entries, and keep failed web reply drafts visible with the transport error.
 - Keep account-scoped manual sync buttons disabled until account metadata loads so saved timelines do not submit accountless collection syncs.
