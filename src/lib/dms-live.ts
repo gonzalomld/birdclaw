@@ -18,6 +18,7 @@ import {
 } from "./x-profile";
 
 export const DEFAULT_DMS_CACHE_TTL_MS = 2 * 60_000;
+const PREVIEW_MESSAGE_ID_PREFIX = "preview:";
 
 export interface SyncDirectMessagesViaCachedBirdOptions {
 	account?: string;
@@ -46,6 +47,10 @@ function assertBirdLimit(limit: number) {
 function normalizeExternalUserId(value: string | null | undefined) {
 	const trimmed = value?.trim();
 	return trimmed ? trimmed : undefined;
+}
+
+function makePreviewMessageId(conversationId: string): string {
+	return `${PREVIEW_MESSAGE_ID_PREFIX}${conversationId}`;
 }
 
 function resolveAccount(db: Database, accountId?: string) {
@@ -324,6 +329,9 @@ function mergeDirectMessagesIntoLocalStore(
 			`bird DM payload does not include @${accountUsername}; refusing to sync into ${accountId}`,
 		);
 	}
+	if (!localExternalUserId) {
+		return;
+	}
 	const profilesByExternalId = new Map<string, string>();
 	for (const user of users.values()) {
 		const resolved = upsertProfileFromXUser(db, toXUser(user));
@@ -375,11 +383,12 @@ function mergeDirectMessagesIntoLocalStore(
 	const insertFts = db.prepare(
 		"insert into dm_fts (message_id, text) values (?, ?)",
 	);
+	const deleteMessage = db.prepare("delete from dm_messages where id = ?");
 
 	db.transaction(() => {
 		for (const conversation of payload.conversations) {
 			const events = eventsByConversation.get(conversation.id) ?? [];
-			if (events.length === 0) {
+			if (events.length === 0 && !conversation.lastMessagePreview) {
 				continue;
 			}
 
@@ -401,13 +410,14 @@ function mergeDirectMessagesIntoLocalStore(
 			const lastMessageAt = toIsoTimestamp(
 				latest?.createdAt ?? conversation.lastMessageAt,
 			);
-			const latestInbound =
-				latest?.senderId !== localExternalUserId &&
-				latest?.sender?.username?.toLowerCase() !==
-					accountUsername.toLowerCase();
 			const inboxKind =
 				conversation.inboxKind ??
 				(conversation.isMessageRequest ? "request" : "accepted");
+			const latestInbound = latest
+				? latest.senderId !== localExternalUserId &&
+					latest.sender?.username?.toLowerCase() !==
+						accountUsername.toLowerCase()
+				: inboxKind === "request";
 			upsertConversation.run(
 				conversation.id,
 				accountId,
@@ -417,6 +427,28 @@ function mergeDirectMessagesIntoLocalStore(
 				lastMessageAt,
 				latestInbound ? 1 : 0,
 			);
+
+			const previewMessageId = makePreviewMessageId(conversation.id);
+			if (events.length === 0 && conversation.lastMessagePreview) {
+				const previewSenderProfileId = latestInbound
+					? participantProfileId
+					: (profilesByExternalId.get(localExternalUserId) ??
+						participantProfileId);
+				upsertMessage.run(
+					previewMessageId,
+					conversation.id,
+					previewSenderProfileId,
+					conversation.lastMessagePreview,
+					lastMessageAt,
+					latestInbound ? "inbound" : "outbound",
+				);
+				replaceFts.run(previewMessageId);
+				insertFts.run(previewMessageId, conversation.lastMessagePreview);
+				continue;
+			}
+
+			replaceFts.run(previewMessageId);
+			deleteMessage.run(previewMessageId);
 
 			for (const event of events) {
 				const senderId = event.senderId ?? event.sender?.id;

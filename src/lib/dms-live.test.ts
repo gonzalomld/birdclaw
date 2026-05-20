@@ -328,6 +328,72 @@ describe("cached live DMs", () => {
 		]);
 	});
 
+	it("keeps request conversations that only have a last-message preview", async () => {
+		makeTempHome();
+		listDirectMessagesViaBirdMock.mockResolvedValueOnce({
+			success: true,
+			conversations: [
+				{
+					id: "25401953-55",
+					participants: [
+						{ id: "25401953" },
+						{ id: "55", username: "previewonly", name: "Preview Only" },
+					],
+					messages: [],
+					lastMessageAt: "2026-04-25T20:00:00.000Z",
+					lastMessagePreview: "Preview text without an event body",
+					inboxKind: "request",
+					isMessageRequest: true,
+				},
+			],
+			events: [],
+		});
+		const { syncDirectMessagesViaCachedBird } = await import("./dms-live");
+
+		await expect(
+			syncDirectMessagesViaCachedBird({
+				account: "acct_primary",
+				limit: 5,
+				refresh: true,
+			}),
+		).resolves.toEqual(
+			expect.objectContaining({
+				source: "bird",
+				conversations: 1,
+				messages: 0,
+			}),
+		);
+		expect(listDmConversations({ inbox: "requests", limit: 10 })).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: "25401953-55",
+					inboxKind: "request",
+					isMessageRequest: true,
+					lastMessagePreview: "Preview text without an event body",
+					needsReply: true,
+					participant: expect.objectContaining({
+						handle: "previewonly",
+						displayName: "Preview Only",
+					}),
+				}),
+			]),
+		);
+		expect(
+			listDmConversations({
+				search: "Preview text",
+				inbox: "requests",
+				limit: 10,
+			}).map((item) => item.id),
+		).toEqual(["25401953-55"]);
+		expect(getConversationThread("25401953-55")?.messages).toEqual([
+			expect.objectContaining({
+				id: "preview:25401953-55",
+				text: "Preview text without an event body",
+				direction: "inbound",
+			}),
+		]);
+	});
+
 	it("imports sparse outbound messages from the stable account id", async () => {
 		makeTempHome();
 		listDirectMessagesViaBirdMock.mockResolvedValueOnce({
