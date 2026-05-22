@@ -150,8 +150,8 @@ describe("today route", () => {
 			const includeDms = url.searchParams.get("includeDms") === "true";
 			const label = period === "week" ? "Last 7 days" : "Today";
 			const markdown = includeDms
-				? "# With DMs\n\n- **Reply:** ask @alice about tweet_1"
-				: `# ${label}\n\n- **Reply:** ask @alice about tweet_1`;
+				? "# With DMs\n\n## What people are talking about\n\n- **Reply:** ask @alice about tweet_1"
+				: `# ${label}\n\n## What people are talking about\n\n- **Reply:** ask @alice about tweet_1`;
 			return ndjsonResponse([
 				{ type: "delta", delta: `${markdown}\n` },
 				{ type: "done", result: digestResult(label, markdown, includeDms) },
@@ -161,24 +161,28 @@ describe("today route", () => {
 
 		render(<TodayRoute />);
 
-		expect(await screen.findByText("Today summary")).toBeInTheDocument();
-		expect(screen.getByText("Useful signal")).toBeInTheDocument();
-		expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
+		expect(
+			await screen.findByRole("heading", { name: "Today", level: 1 }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", {
+				name: "What people are talking about",
+				level: 2,
+			}),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Today summary")).toBeNull();
+		expect(screen.queryByText("Useful signal")).toBeNull();
+		expect(screen.queryByText(/Action items/i)).toBeNull();
 		expect(screen.queryByText("# Today")).not.toBeInTheDocument();
-		expect(
-			screen.getAllByText((_, element) => element?.textContent === "Today")
-				.length,
-		).toBeGreaterThan(0);
-		expect(
-			screen.getAllByText(
-				(_, element) => element?.textContent === "reply: Reply to Alice",
-			).length,
-		).toBeGreaterThan(0);
-		expect(screen.getByRole("link", { name: "Example" })).toHaveAttribute(
+		expect(screen.getByText("Reply:")).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "@alice" })).toHaveAttribute(
 			"href",
-			"https://example.com/",
+			"https://x.com/alice",
 		);
-		expect(screen.getByText("Unsafe").closest("a")).toBeNull();
+		expect(screen.getByRole("link", { name: "tweet_1" })).toHaveAttribute(
+			"href",
+			"https://x.com/alice/status/tweet_1",
+		);
 		expect(
 			screen.getByText("3 home · 2 mentions · 4 links"),
 		).toBeInTheDocument();
@@ -193,10 +197,14 @@ describe("today route", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Week" }));
-		expect(await screen.findByText("Last 7 days summary")).toBeInTheDocument();
+		expect(
+			await screen.findByRole("heading", { name: "Last 7 days", level: 1 }),
+		).toBeInTheDocument();
 
 		fireEvent.click(screen.getByLabelText("DMs"));
-		expect(await screen.findByText("With DMs")).toBeInTheDocument();
+		expect(
+			await screen.findByRole("heading", { name: "With DMs", level: 1 }),
+		).toBeInTheDocument();
 		expect(
 			screen.getByText("3 home · 2 mentions · 4 links · 1 DMs"),
 		).toBeInTheDocument();

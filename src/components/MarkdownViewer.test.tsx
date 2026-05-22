@@ -119,6 +119,29 @@ describe("MarkdownViewer", () => {
 		).not.toHaveClass("font-mono");
 	});
 
+	it("renders normal markdown links without changing the surrounding text font", () => {
+		render(
+			<MarkdownViewer
+				context={context}
+				markdown={
+					"- [Kilo update](https://example.com/kilo) mattered because BYOK access broadened (tweet_2057578665408434460)."
+				}
+			/>,
+		);
+
+		const link = screen.getByRole("link", { name: "Kilo update" });
+		expect(link).toHaveAttribute("href", "https://example.com/kilo");
+		expect(link).not.toHaveClass("font-mono");
+		expect(
+			screen.getByRole("link", {
+				name: "mattered because BYOK access broadened",
+			}),
+		).toHaveAttribute(
+			"href",
+			"https://x.com/kilocode/status/2057578665408434460",
+		);
+	});
+
 	it("links comma-separated tweet citations to nearby readable text", () => {
 		render(
 			<MarkdownViewer

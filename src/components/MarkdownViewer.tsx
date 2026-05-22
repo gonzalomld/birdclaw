@@ -2,7 +2,8 @@ import { Fragment, type ReactNode, useState } from "react";
 import { formatCompactNumber, formatShortTimestamp } from "#/lib/present";
 import type { PeriodDigestContext } from "#/lib/period-digest";
 import type { ProfileRecord } from "#/lib/types";
-import { cx, tweetMentionClass } from "#/lib/ui";
+import { cx, tweetLinkClass, tweetMentionClass } from "#/lib/ui";
+import { safeHttpUrl } from "#/lib/url-safety";
 import { AvatarChip } from "./AvatarChip";
 import { ProfilePreview } from "./ProfilePreview";
 
@@ -205,7 +206,7 @@ function linkTrailingCitationText(
 
 function renderInline(text: string, lookup: InlineLookup) {
 	const pattern =
-		/(\*\*[^*]+\*\*|@[A-Za-z0-9_]{1,20}|\((?:\s*(?:tweet_[A-Za-z0-9_:-]+|\d{12,25})\s*,?)+\)|\btweet_[A-Za-z0-9_:-]+\b|\b\d{12,25}\b)/g;
+		/(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|@[A-Za-z0-9_]{1,20}|\((?:\s*(?:tweet_[A-Za-z0-9_:-]+|\d{12,25})\s*,?)+\)|\btweet_[A-Za-z0-9_:-]+\b|\b\d{12,25}\b)/g;
 	const nodes: ReactNode[] = [];
 	let cursor = 0;
 	let match: RegExpExecArray | null;
@@ -222,6 +223,27 @@ function renderInline(text: string, lookup: InlineLookup) {
 				<strong key={`${token}-${String(match.index)}`}>
 					{token.slice(2, -2)}
 				</strong>,
+			);
+			continue;
+		}
+
+		const markdownLink = /^\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(token);
+		if (markdownLink) {
+			const href = safeHttpUrl(markdownLink[2]);
+			nodes.push(
+				href ? (
+					<a
+						key={`${token}-${String(match.index)}`}
+						className={tweetLinkClass}
+						href={href}
+						rel="noreferrer"
+						target="_blank"
+					>
+						{markdownLink[1]}
+					</a>
+				) : (
+					markdownLink[1]
+				),
 			);
 			continue;
 		}

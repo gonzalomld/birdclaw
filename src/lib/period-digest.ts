@@ -542,7 +542,7 @@ function digestCacheKey(
 	options: PeriodDigestOptions,
 ) {
 	return [
-		"period-digest:v1",
+		"period-digest:v2",
 		modelFromOptions(options),
 		reasoningEffortFromOptions(options),
 		serviceTierFromOptions(options),
@@ -572,16 +572,24 @@ Since: ${context.window.since}
 Until: ${context.window.until}
 Sources: ${JSON.stringify(context.counts)}
 
-Write a concise, high-signal "what happened" report from this local Twitter/X dataset.
+Write a high-signal "what happened" report from this local Twitter/X dataset.
 
 Requirements:
-- Stream readable Markdown first.
-- Be specific about what happened, not generic about "engagement".
-- Cite tweets inline with their id in parentheses, e.g. (tweet_123), and use authors/links when useful.
-- Separate signal from noise.
-- Include action items only when there is something Peter should reply to, read, or follow up.
+- Stream one readable Markdown report first. The UI will show this text directly; do not rely on separate cards or structured summaries.
+- Target 700-1100 words when there is enough data.
+- Start with a 2-3 sentence lead that immediately says what people are talking about.
+- Use sections named "What people are talking about", "Important links shared", and "Worth opening". Add "Worth replying to" only if there are clearly high-signal replies.
+- Use bullets under each section. Each bullet should be specific and explain why it matters.
+- For tweets: cite every claim with inline tweet ids at the end of the relevant sentence or bullet, e.g. (tweet_123, tweet_456). These citations become hoverable source links.
+- For links: emit normal Markdown links, e.g. [title](https://example.com), then cite the sharing tweet ids in the same bullet.
+- Prefer synthesis over chronology. Group repeated chatter into one bullet.
+- Mention handles when useful, but do not make the report a list of handles.
+- Do not include a generic "Action items" section.
+- If there is no data, say that plainly in one short paragraph.
 - DMs are private context and only present when explicitly included.
 - After the Markdown, output a blank line, then a line containing only three hyphens, then one compact JSON object.
+- Keep actionItems empty unless you wrote a "Worth replying to" section.
+- Put every tweet id cited in the Markdown into sourceTweetIds.
 - JSON shape: { "title": string, "summary": string, "keyTopics": [{ "title": string, "summary": string, "tweetIds": string[], "handles": string[] }], "notableLinks": [{ "title": string, "url": string, "why": string, "sourceTweetIds": string[] }], "people": [{ "handle": string, "name"?: string, "why": string }], "actionItems": [{ "kind": "reply"|"follow_up"|"read"|"sync", "label": string, "tweetId"?: string, "dmConversationId"?: string }], "sourceTweetIds": string[] }
 
 Dataset:
