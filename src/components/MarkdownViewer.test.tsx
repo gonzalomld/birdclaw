@@ -142,6 +142,35 @@ describe("MarkdownViewer", () => {
 		);
 	});
 
+	it("renders model-emitted markdown links with spaces or wrapped URLs", () => {
+		render(
+			<MarkdownViewer
+				context={context}
+				markdown={[
+					"- [Lucid Windows accessibility tool announcement] (https://x.com/zhangdao439566/status/2057755065876938783) connects desktop control to accessibility use cases.",
+					"- [Kitze’s Benji rewrite thread]",
+					"(https://x.com/thekitze/status/2057748944592277563) is useful for long-running product iteration.",
+				].join("\n")}
+			/>,
+		);
+
+		expect(
+			screen.getByRole("link", {
+				name: "Lucid Windows accessibility tool announcement",
+			}),
+		).toHaveAttribute(
+			"href",
+			"https://x.com/zhangdao439566/status/2057755065876938783",
+		);
+		expect(
+			screen.getByRole("link", { name: "Kitze’s Benji rewrite thread" }),
+		).toHaveAttribute(
+			"href",
+			"https://x.com/thekitze/status/2057748944592277563",
+		);
+		expect(screen.queryByText("[Kitze’s Benji rewrite thread]")).toBeNull();
+	});
+
 	it("links comma-separated tweet citations to nearby readable text", () => {
 		render(
 			<MarkdownViewer

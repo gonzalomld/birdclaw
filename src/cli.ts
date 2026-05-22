@@ -864,7 +864,7 @@ program
 	.option("--include-dms", "Include private DM context")
 	.option("--model <model>", "OpenAI model id")
 	.option("--refresh", "Bypass the local digest cache")
-	.option("--max-tweets <n>", "Maximum tweet context", "120")
+	.option("--max-tweets <n>", "Maximum tweet context", "300")
 	.option("--max-links <n>", "Maximum linked articles", "12")
 	.action(async (options) => {
 		await autoUpdateBeforeRead();
@@ -882,7 +882,7 @@ program
 	.option("--until <isoDate>", "End of explicit window")
 	.option("--model <model>", "OpenAI model id")
 	.option("--refresh", "Bypass the local digest cache")
-	.option("--max-tweets <n>", "Maximum tweet context", "120")
+	.option("--max-tweets <n>", "Maximum tweet context", "300")
 	.option("--max-links <n>", "Maximum linked articles", "12")
 	.action(async (period, options) => {
 		await autoUpdateBeforeRead();

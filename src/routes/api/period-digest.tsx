@@ -29,7 +29,7 @@ function parseOptions(url: URL): PeriodDigestOptions {
 		refresh: parseBoolean(url.searchParams.get("refresh")),
 		model: url.searchParams.get("model") === "gpt-5.5" ? "gpt-5.5" : undefined,
 		maxTweets: parseBoundedInteger(url.searchParams.get("maxTweets"), {
-			max: 100,
+			max: 500,
 		}),
 		maxLinks: parseBoundedInteger(url.searchParams.get("maxLinks"), {
 			max: 25,

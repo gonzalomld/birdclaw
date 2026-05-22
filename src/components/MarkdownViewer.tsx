@@ -206,7 +206,7 @@ function linkTrailingCitationText(
 
 function renderInline(text: string, lookup: InlineLookup) {
 	const pattern =
-		/(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|@[A-Za-z0-9_]{1,20}|\((?:\s*(?:tweet_[A-Za-z0-9_:-]+|\d{12,25})\s*,?)+\)|\btweet_[A-Za-z0-9_:-]+\b|\b\d{12,25}\b)/g;
+		/(\[[^\]\n]+\]\s*\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|@[A-Za-z0-9_]{1,20}|\((?:\s*(?:tweet_[A-Za-z0-9_:-]+|\d{12,25})\s*,?)+\)|\btweet_[A-Za-z0-9_:-]+\b|\b\d{12,25}\b)/g;
 	const nodes: ReactNode[] = [];
 	let cursor = 0;
 	let match: RegExpExecArray | null;
@@ -227,7 +227,9 @@ function renderInline(text: string, lookup: InlineLookup) {
 			continue;
 		}
 
-		const markdownLink = /^\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(token);
+		const markdownLink = /^\[([^\]\n]+)\]\s*\((https?:\/\/[^\s)]+)\)$/.exec(
+			token,
+		);
 		if (markdownLink) {
 			const href = safeHttpUrl(markdownLink[2]);
 			nodes.push(
@@ -356,7 +358,11 @@ export function MarkdownViewer({
 	className?: string;
 }) {
 	const lookup = buildLookup(context);
-	const lines = markdown.split(/\r?\n/);
+	const normalizedMarkdown = markdown.replace(
+		/\]\s*\r?\n\s*\((https?:\/\/[^\s)]+)\)/g,
+		"]($1)",
+	);
+	const lines = normalizedMarkdown.split(/\r?\n/);
 	const nodes: ReactNode[] = [];
 	let listItems: ReactNode[][] = [];
 

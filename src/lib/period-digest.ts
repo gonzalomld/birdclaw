@@ -166,7 +166,7 @@ interface OpenAIStreamState {
 const DEFAULT_MODEL = "gpt-5.5";
 const DEFAULT_REASONING_EFFORT = "medium";
 const DEFAULT_SERVICE_TIER = "priority";
-const DEFAULT_MAX_TWEETS = 120;
+const DEFAULT_MAX_TWEETS = 300;
 const DEFAULT_MAX_LINKS = 12;
 const DELIMITER_PATTERN = /\n---\s*\n/;
 const VISIBLE_DELIMITER_HOLD = 8;
@@ -581,7 +581,7 @@ Requirements:
 - Use sections named "What people are talking about", "Important links shared", and "Worth opening". Add "Worth replying to" only if there are clearly high-signal replies.
 - Use bullets under each section. Each bullet should be specific and explain why it matters.
 - For tweets: cite every claim with inline tweet ids at the end of the relevant sentence or bullet, e.g. (tweet_123, tweet_456). These citations become hoverable source links.
-- For links: emit normal Markdown links, e.g. [title](https://example.com), then cite the sharing tweet ids in the same bullet.
+- For links: emit normal Markdown links with no space between the label and URL, e.g. [title](https://example.com), then cite the sharing tweet ids in the same bullet.
 - Prefer synthesis over chronology. Group repeated chatter into one bullet.
 - Mention handles when useful, but do not make the report a list of handles.
 - Do not include a generic "Action items" section.

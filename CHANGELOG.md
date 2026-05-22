@@ -14,10 +14,12 @@
 ### Changed
 
 - Stream the Today report as one longer Markdown brief with inline hoverable tweet citations instead of adding separate overview and action cards after the model finishes.
+- Increase the default Today digest tweet context and accept larger web digest requests so 24-hour reports can see deeper into the local archive.
 - Start the Effect rewrite by making `effect` a first-class runtime dependency and moving web API fetches, web sync orchestration, live command helpers, action transport, `bird`/`xurl` JSON/action transports and public adapters, backup export/import/validation and Git orchestration, moderation target resolution, blocks/mutes write helpers, remote block sync, batch blocklist imports, x-web mutations, authored/mentions/mention-thread sync including xurl recent-search and parent-walk fallback internals, conversation loading, home timeline, saved collection, DM live sync, profile hydration/resolution/affiliation/reply inspection, shared tweet lookup, research and whois report generation, follow graph live sync, link preview/index fetches, archive discovery/import subprocesses, avatar/URL caches, OpenAI/inbox scoring, scheduled bookmark sync locking/audit/launchd install, and media-fetch archive reuse/download concurrency onto Effect programs with Promise-compatible public wrappers.
 
 ### Fixed
 
+- Render model-emitted Markdown links even when the model inserts a space or line break between the link label and URL.
 - Close Today tweet hover previews when opening their source links so command-clicked citations cannot leave stale preview cards stacked on later hovers.
 - Keep the Messages shell aligned with the rest of the app while collapsing the sidebar labels, and label optional follower/score DM filters instead of showing default `0` fields.
 - Link grouped AI digest tweet citations to nearby readable text instead of showing raw `tweet_...` IDs.
