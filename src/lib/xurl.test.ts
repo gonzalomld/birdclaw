@@ -418,6 +418,120 @@ describe("xurl transport wrapper", () => {
 		]);
 	});
 
+	it("verifies duplicate OAuth2 username labels before timeline reads", async () => {
+		execFileAsyncMock
+			.mockResolvedValueOnce({
+				stdout:
+					"default [client_id: old]\n  oauth2: steipete\nxurl-steipete [client_id: new]\n  oauth2: steipete\n",
+				stderr: "",
+			})
+			.mockResolvedValueOnce({
+				stdout: JSON.stringify({
+					data: { id: "999", username: "openclaw" },
+				}),
+				stderr: "",
+			})
+			.mockResolvedValueOnce({
+				stdout: JSON.stringify({
+					data: { id: "25401953", username: "steipete" },
+				}),
+				stderr: "",
+			})
+			.mockResolvedValueOnce({
+				stdout: JSON.stringify({ data: [] }),
+				stderr: "",
+			});
+		const { listHomeTimelineViaXurl } = await import("./xurl");
+
+		await listHomeTimelineViaXurl({
+			maxResults: 100,
+			userId: "25401953",
+			username: "steipete",
+		});
+
+		expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, "xurl", [
+			"--app",
+			"default",
+			"--auth",
+			"oauth2",
+			"--username",
+			"steipete",
+			"/2/users/me",
+		]);
+		expect(execFileAsyncMock).toHaveBeenNthCalledWith(3, "xurl", [
+			"--app",
+			"xurl-steipete",
+			"--auth",
+			"oauth2",
+			"--username",
+			"steipete",
+			"/2/users/me",
+		]);
+		expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, "xurl", [
+			"--app",
+			"xurl-steipete",
+			"--auth",
+			"oauth2",
+			"--username",
+			"steipete",
+			`/2/users/25401953/timelines/reverse_chronological?max_results=100&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=created_at%2Cconversation_id%2Centities%2Cpublic_metrics%2Creferenced_tweets&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
+		]);
+	});
+
+	it("falls back to another OAuth2 label when the primary label fails", async () => {
+		const status =
+			"default [client_id: old]\n  oauth2: steipete\nxurl-steipete [client_id: new]\n  oauth2: openclaw-steipete\n";
+		execFileAsyncMock
+			.mockResolvedValueOnce({ stdout: status, stderr: "" })
+			.mockRejectedValueOnce(new Error("unauthorized"))
+			.mockResolvedValueOnce({ stdout: status, stderr: "" })
+			.mockResolvedValueOnce({
+				stdout: JSON.stringify({
+					data: { id: "25401953", username: "steipete" },
+				}),
+				stderr: "",
+			})
+			.mockResolvedValueOnce({
+				stdout: JSON.stringify({ data: [] }),
+				stderr: "",
+			});
+		const { listHomeTimelineViaXurl } = await import("./xurl");
+
+		await listHomeTimelineViaXurl({
+			maxResults: 100,
+			userId: "25401953",
+			username: "steipete",
+		});
+
+		expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, "xurl", [
+			"--app",
+			"default",
+			"--auth",
+			"oauth2",
+			"--username",
+			"steipete",
+			`/2/users/25401953/timelines/reverse_chronological?max_results=100&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=created_at%2Cconversation_id%2Centities%2Cpublic_metrics%2Creferenced_tweets&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
+		]);
+		expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, "xurl", [
+			"--app",
+			"xurl-steipete",
+			"--auth",
+			"oauth2",
+			"--username",
+			"openclaw-steipete",
+			"/2/users/me",
+		]);
+		expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, "xurl", [
+			"--app",
+			"xurl-steipete",
+			"--auth",
+			"oauth2",
+			"--username",
+			"openclaw-steipete",
+			`/2/users/25401953/timelines/reverse_chronological?max_results=100&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=created_at%2Cconversation_id%2Centities%2Cpublic_metrics%2Creferenced_tweets&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
+		]);
+	});
+
 	it("passes start_time for mention backfills when present", async () => {
 		execFileAsyncMock.mockResolvedValueOnce({
 			stdout: JSON.stringify({
