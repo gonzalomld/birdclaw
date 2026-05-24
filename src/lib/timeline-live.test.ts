@@ -66,11 +66,13 @@ describe("live home timeline sync", () => {
 			meta: { result_count: 0 },
 		});
 		const { syncHomeTimelineEffect } = await import("./timeline-live");
+		const progress: unknown[] = [];
 
 		const effect = syncHomeTimelineEffect({
 			account: "acct_primary",
 			limit: 5,
 			refresh: true,
+			onProgress: (value) => progress.push(value),
 		});
 
 		expect(listHomeTimelineViaBirdMock).not.toHaveBeenCalled();
@@ -78,6 +80,14 @@ describe("live home timeline sync", () => {
 			source: "bird",
 			count: 0,
 		});
+		expect(progress).toEqual([
+			expect.objectContaining({
+				source: "bird",
+				fetched: 0,
+				total: 5,
+				done: true,
+			}),
+		]);
 		expect(listHomeTimelineViaBirdMock).toHaveBeenCalledTimes(1);
 	});
 
