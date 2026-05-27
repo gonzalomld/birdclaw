@@ -1281,7 +1281,7 @@ export function streamPeriodDigestEffect(
 		handlers.onEvent?.({ type: "start", context, cached: false });
 		emitDigestStatus(handlers, "Streaming AI summary");
 		const response = yield* tryDigestPromise(() =>
-			fetch("https://api.openai.com/v1/responses", {
+			fetch(process.env.OPENAI_BASE_URL ? process.env.OPENAI_BASE_URL + "/v1/responses" : "https://api.openai.com/v1/responses", {
 				method: "POST",
 				signal: options.signal,
 				headers: {
