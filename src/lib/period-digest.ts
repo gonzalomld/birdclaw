@@ -28,6 +28,7 @@ export interface PeriodDigestOptions {
 	includeDms?: boolean;
 	refresh?: boolean;
 	model?: string;
+	language?: string;
 	reasoningEffort?: "minimal" | "low" | "medium" | "high";
 	serviceTier?: "default" | "flex" | "priority";
 	signal?: AbortSignal;
@@ -561,6 +562,10 @@ export function collectPeriodDigestContext(
 	};
 }
 
+function languageFromOptions(options: PeriodDigestOptions) {
+	return options.language ?? process.env.BIRDCLAW_DIGEST_LANGUAGE ?? undefined;
+}
+
 function modelFromOptions(options: PeriodDigestOptions) {
 	return options.model ?? process.env.BIRDCLAW_AI_MODEL ?? DEFAULT_MODEL;
 }
@@ -832,16 +837,19 @@ function digestCacheKey(
 	context: PeriodDigestContext,
 	options: PeriodDigestOptions,
 ) {
-	return [
+	const parts = [
 		"period-digest:v2",
 		modelFromOptions(options),
 		reasoningEffortFromOptions(options),
 		serviceTierFromOptions(options),
 		context.hash,
-	].join(":");
+	];
+	const lang = languageFromOptions(options);
+	if (lang) parts.push(`lang:${lang}`);
+	return parts.join(":");
 }
 
-function buildPrompt(context: PeriodDigestContext) {
+function buildPrompt(context: PeriodDigestContext, options?: { language?: string }) {
 	const promptTweets = context.tweets.map((tweet) => ({
 		id: tweet.id,
 		url: tweet.url,
@@ -942,7 +950,7 @@ Requirements:
 - JSON shape: { "title": string, "summary": string, "keyTopics": [{ "title": string, "summary": string, "tweetIds": string[], "handles": string[] }], "notableLinks": [{ "title": string, "url": string, "why": string, "sourceTweetIds": string[] }], "people": [{ "handle": string, "name"?: string, "why": string }], "actionItems": [{ "kind": "reply"|"follow_up"|"read"|"sync", "label": string, "tweetId"?: string, "dmConversationId"?: string }], "sourceTweetIds": string[] }
 
 Dataset:
-${JSON.stringify(dataset)}`;
+${JSON.stringify(dataset)}${options?.language ? `\n\nIMPORTANT: Write the entire Markdown report in ${options.language}. Section titles, bullets, and all prose must be in ${options.language}. Keep handles, URLs, tweet ids, and the JSON object in their original form.` : ""}`;
 }
 
 function fallbackDigest(
@@ -1127,7 +1135,7 @@ function createOpenAIRequestBody(
 			},
 			{
 				role: "user",
-				content: buildPrompt(context),
+				content: buildPrompt(context, { language: languageFromOptions(options) }),
 			},
 		],
 	};
