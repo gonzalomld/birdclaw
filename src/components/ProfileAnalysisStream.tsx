@@ -6,6 +6,7 @@ import type {
 	ProfileAnalysisRunResult,
 	ProfileAnalysisStreamEvent,
 } from "#/lib/profile-analysis";
+import type { ProfileRecord } from "#/lib/types";
 import { errorCopyClass } from "#/lib/ui";
 
 export interface ProfileAnalysisRequestOptions {
@@ -32,6 +33,95 @@ export const DEFAULT_PROFILE_ANALYSIS_LIMITS = {
 	maxConversations: 80,
 	maxConversationPages: 3,
 } as const;
+
+const PROFILE_HYDRATION_LIMIT = 50;
+const PROFILE_MENTION_RE = /(^|[^\w@./])@([A-Za-z0-9_]{1,15})\b/g;
+
+function normalizeProfileHandle(value: string) {
+	return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+function handlesFromText(value: string) {
+	return Array.from(value.matchAll(PROFILE_MENTION_RE)).map(
+		(match) => match[2],
+	);
+}
+
+function knownProfileHandles(context: ProfileAnalysisContext) {
+	const handles = new Set<string>();
+	handles.add(normalizeProfileHandle(context.profile.handle));
+	for (const profile of context.profiles ?? []) {
+		handles.add(normalizeProfileHandle(profile.handle));
+	}
+	for (const tweet of context.conversations) {
+		handles.add(normalizeProfileHandle(tweet.author));
+	}
+	return handles;
+}
+
+function collectProfileAnalysisHydrationHandles(
+	result: ProfileAnalysisRunResult,
+) {
+	const handles = new Set<string>();
+	const known = knownProfileHandles(result.context);
+	const add = (value: string | undefined) => {
+		if (!value) return;
+		const handle = normalizeProfileHandle(value);
+		if (!/^[a-z0-9_]{1,15}$/.test(handle) || known.has(handle)) return;
+		handles.add(handle);
+	};
+
+	for (const handle of result.analysis.sourceHandles) add(handle);
+	for (const theme of result.analysis.themes) {
+		for (const handle of theme.handles) add(handle);
+	}
+	for (const handle of handlesFromText(result.markdown)) add(handle);
+	for (const handle of handlesFromText(result.context.profile.bio)) add(handle);
+	for (const tweet of result.context.tweets) {
+		for (const handle of handlesFromText(tweet.text)) add(handle);
+	}
+	for (const tweet of result.context.conversations) {
+		for (const handle of handlesFromText(tweet.text)) add(handle);
+		for (const handle of handlesFromText(tweet.bio)) add(handle);
+	}
+
+	return [...handles].slice(0, PROFILE_HYDRATION_LIMIT);
+}
+
+function applyHydratedProfilesToProfileAnalysisContext(
+	context: ProfileAnalysisContext,
+	profiles: ProfileRecord[],
+) {
+	const existing = new Map<string, ProfileRecord>();
+	for (const profile of context.profiles ?? []) {
+		existing.set(normalizeProfileHandle(profile.handle), profile);
+	}
+	for (const profile of profiles) {
+		existing.set(normalizeProfileHandle(profile.handle), profile);
+	}
+	return {
+		...context,
+		profiles: [...existing.values()],
+	};
+}
+
+async function hydrateProfileAnalysisContext(result: ProfileAnalysisRunResult) {
+	const handles = collectProfileAnalysisHydrationHandles(result);
+	if (handles.length === 0) return result.context;
+	const url = new URL("/api/profile-hydrate", window.location.origin);
+	url.searchParams.set("handles", handles.join(","));
+	const response = await fetch(url);
+	if (!response.ok) return result.context;
+	const payload = (await response.json()) as {
+		results?: Array<{ status?: string; profile?: ProfileRecord }>;
+	};
+	const profiles = (payload.results ?? [])
+		.filter((item) => item.status === "hit" && item.profile)
+		.map((item) => item.profile as ProfileRecord);
+	return profiles.length > 0
+		? applyHydratedProfilesToProfileAnalysisContext(result.context, profiles)
+		: result.context;
+}
 
 export function profileAnalysisUrl(
 	handle: string,
@@ -169,6 +259,19 @@ export function useProfileAnalysisStream(handle: string): ProfileAnalysisState {
 										setContext(event.result.context);
 										setMarkdown(event.result.markdown);
 										setStatus(event.result.cached ? "Cached" : "Complete");
+										void hydrateProfileAnalysisContext(event.result)
+											.then((hydratedContext) => {
+												if (!isActiveRequest()) return;
+												if (hydratedContext === event.result.context) return;
+												setContext(hydratedContext);
+												setResult({
+													...event.result,
+													context: hydratedContext,
+												});
+											})
+											.catch(() => {
+												// Profile hover hydration is best-effort; analysis remains usable.
+											});
 									} else if (event.type === "error") {
 										setError(event.error);
 									}

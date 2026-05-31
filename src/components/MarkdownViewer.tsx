@@ -50,7 +50,10 @@ function adjacentParenthesizedTweetReferences(value: string, cursor: number) {
 	return { references, cursor: nextCursor };
 }
 
-function trailingReadableBounds(value: string) {
+function trailingReadableBounds(
+	value: string,
+	options: { preferClause?: boolean } = {},
+) {
 	let start = 0;
 	for (const separator of [". ", "? ", "! ", "; ", ": "]) {
 		const index = value.lastIndexOf(separator);
@@ -70,7 +73,10 @@ function trailingReadableBounds(value: string) {
 		}
 	}
 
-	if (clauseStart > start || end - start > 140) {
+	if (
+		options.preferClause !== false &&
+		(clauseStart > start || end - start > 140)
+	) {
 		while (clauseStart < end && /\s/.test(value[clauseStart] ?? "")) {
 			clauseStart += 1;
 		}
@@ -200,6 +206,90 @@ function additionalDirectCitationLinks(references: string[], key: string) {
 	]);
 }
 
+function splitReadableForSourceLinks(value: string, count: number) {
+	if (count < 2) return null;
+	const separators = Array.from(
+		value.matchAll(/,\s+and\s+|,\s+or\s+|;\s+|,\s+|\s+and\s+|\s+or\s+/g),
+	);
+	if (separators.length < count - 1) return null;
+
+	const selected = separators.slice(-(count - 1));
+	const parts: Array<{ text: string; separatorAfter: string }> = [];
+	let cursor = 0;
+	for (const separator of selected) {
+		const index = separator.index;
+		if (index === undefined) return null;
+		const text = value.slice(cursor, index);
+		if (!text.trim()) return null;
+		parts.push({ text, separatorAfter: separator[0] });
+		cursor = index + separator[0].length;
+	}
+
+	const lastText = value.slice(cursor);
+	if (!lastText.trim()) return null;
+	parts.push({ text: lastText, separatorAfter: "" });
+	return parts.length === count ? parts : null;
+}
+
+function linkedCitationParts(
+	readable: string,
+	tweets: CitationTweet[],
+	key: string,
+) {
+	const parts = splitReadableForSourceLinks(readable, tweets.length);
+	if (!parts) {
+		const tweet = tweets[0];
+		if (!tweet) return [];
+		return [
+			<TweetPreviewToken key={key} tweet={tweet}>
+				{readable}
+			</TweetPreviewToken>,
+			...additionalCitationLinks(tweets, key),
+		];
+	}
+	return parts.flatMap((part, index) => {
+		const tweet = tweets[index];
+		if (!tweet) return [];
+		return [
+			<TweetPreviewToken key={`${key}-part-${String(index)}`} tweet={tweet}>
+				{part.text}
+			</TweetPreviewToken>,
+			part.separatorAfter,
+		];
+	});
+}
+
+function linkedDirectCitationParts(
+	readable: string,
+	references: string[],
+	key: string,
+) {
+	const parts = splitReadableForSourceLinks(readable, references.length);
+	if (!parts) {
+		const reference = references[0];
+		if (!reference) return [];
+		return [
+			<TweetSourceLink key={key} href={getFallbackTweetUrl(reference)}>
+				{readable}
+			</TweetSourceLink>,
+			...additionalDirectCitationLinks(references, key),
+		];
+	}
+	return parts.flatMap((part, index) => {
+		const reference = references[index];
+		if (!reference) return [];
+		return [
+			<TweetSourceLink
+				key={`${key}-direct-part-${String(index)}`}
+				href={getFallbackTweetUrl(reference)}
+			>
+				{part.text}
+			</TweetSourceLink>,
+			part.separatorAfter,
+		];
+	});
+}
+
 function additionalCitationLinks(tweets: CitationTweet[], key: string) {
 	return tweets.slice(1).flatMap((tweet, index) => [
 		index === 0 ? " " : ", ",
@@ -247,7 +337,9 @@ function linkTrailingCitationText(
 		return true;
 	}
 
-	const bounds = trailingReadableBounds(last);
+	const bounds = trailingReadableBounds(last, {
+		preferClause: tweets.length === 1,
+	});
 	if (!bounds) return false;
 
 	const before = last.slice(0, bounds.start);
@@ -255,10 +347,7 @@ function linkTrailingCitationText(
 	const trailing = last.slice(bounds.end);
 	nodes[nodes.length - 1] = before;
 	nodes.push(
-		<TweetPreviewToken key={key} tweet={tweet}>
-			{readable}
-		</TweetPreviewToken>,
-		...additionalCitationLinks(tweets, key),
+		...linkedCitationParts(readable, tweets, key),
 		/^\s*$/.test(trailing) ? "" : trailing,
 	);
 	return true;
@@ -273,7 +362,9 @@ function linkTrailingDirectCitationText(
 	if (!reference) return false;
 	const last = nodes.at(-1);
 	if (typeof last !== "string") return false;
-	const bounds = trailingReadableBounds(last);
+	const bounds = trailingReadableBounds(last, {
+		preferClause: references.length === 1,
+	});
 	if (!bounds) return false;
 
 	const before = last.slice(0, bounds.start);
@@ -281,10 +372,7 @@ function linkTrailingDirectCitationText(
 	const trailing = last.slice(bounds.end);
 	nodes[nodes.length - 1] = before;
 	nodes.push(
-		<TweetSourceLink key={key} href={getFallbackTweetUrl(reference)}>
-			{readable}
-		</TweetSourceLink>,
-		...additionalDirectCitationLinks(references, key),
+		...linkedDirectCitationParts(readable, references, key),
 		/^\s*$/.test(trailing) ? "" : trailing,
 	);
 	return true;
@@ -545,6 +633,9 @@ function buildLookup(context?: CitationContext | null): InlineLookup {
 	}
 	if (isProfileAnalysisContext(context)) {
 		profilesByHandle.set(context.profile.handle.toLowerCase(), context.profile);
+		for (const profile of context.profiles ?? []) {
+			profilesByHandle.set(profile.handle.toLowerCase(), profile);
+		}
 		for (const tweet of context.tweets) {
 			addLookupTweet(
 				tweetsById,

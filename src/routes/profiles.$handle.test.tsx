@@ -28,13 +28,24 @@ function profileContext() {
 			id: "profile_steipete",
 			handle: "steipete",
 			displayName: "Peter Steinberger",
-			bio: "Builder of agentic software.",
+			bio: "Builder of agentic software. Contact hello@openai.com with @OpenClaw.",
 			followersCount: 123456,
 			followingCount: 987,
 			avatarHue: 18,
 			avatarUrl: "https://pbs.twimg.com/profile_images/1/avatar.jpg",
 			createdAt: "2009-03-19T22:54:05.000Z",
 		},
+		profiles: [
+			{
+				id: "profile_openclaw",
+				handle: "OpenClaw",
+				displayName: "OpenClaw",
+				bio: "Agent tooling.",
+				followersCount: 456,
+				avatarHue: 210,
+				createdAt: "2026-01-01T00:00:00.000Z",
+			},
+		],
 		externalUserId: "123",
 		tweets: [],
 		conversations: [],
@@ -84,8 +95,16 @@ describe("profile route", () => {
 		expect(screen.getByTestId("profile-avatar-overlap")).toHaveClass("-mt-8");
 		expect(screen.getByText("@steipete")).toBeInTheDocument();
 		expect(
-			screen.getByText("Builder of agentic software."),
+			screen.getByText(
+				/Builder of agentic software\. Contact hello@openai\.com with/,
+			),
 		).toBeInTheDocument();
+		expect(screen.queryByRole("link", { name: "@openai" })).toBeNull();
+		expect(screen.getByRole("link", { name: "@OpenClaw" })).toHaveAttribute(
+			"href",
+			"https://x.com/OpenClaw",
+		);
+		expect(screen.getByText("Agent tooling.")).toBeInTheDocument();
 		expect(
 			await screen.findByText("Peter ships agent tools with practical taste."),
 		).toBeInTheDocument();

@@ -27,6 +27,7 @@
 - Open `/profiles/:handle` analysis streams immediately, use same-origin profile fetches, and let `BIRDCLAW_PROFILE_ANALYSIS_ACCOUNT` select the xurl account used for profile backfills.
 - Keep Profile Analyse headers from slicing through loaded avatars/names and turn unresolved numeric tweet citations into safe X source links without leaking raw IDs.
 - Group adjacent Profile Analyse tweet citations so cached AI reports show numbered source links instead of repeated generic `source` labels.
+- Highlight hydrated Profile Analyse `@handle` mentions with profile previews and link multi-source citations to readable clauses when possible.
 - Let normal Discuss web searches reuse cached AI discussions while keeping the Refresh button as the explicit forced-refresh path.
 - Tighten AI report line height and first-block spacing in Today and Discuss.
 

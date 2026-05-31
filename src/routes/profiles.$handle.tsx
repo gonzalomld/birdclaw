@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { AvatarChip } from "#/components/AvatarChip";
+import { ProfilePreview } from "#/components/ProfilePreview";
 import {
 	cleanProfileHandle,
 	formatProfileAnalysisCounts,
@@ -10,6 +11,9 @@ import {
 	useProfileAnalysisStream,
 } from "#/components/ProfileAnalysisStream";
 import { formatCompactNumber } from "#/lib/present";
+import type { ProfileAnalysisContext } from "#/lib/profile-analysis";
+import type { ProfileRecord } from "#/lib/types";
+import { tweetMentionClass } from "#/lib/ui";
 
 export const Route = createFileRoute("/profiles/$handle")({
 	component: ProfilesHandleRoute,
@@ -17,6 +21,7 @@ export const Route = createFileRoute("/profiles/$handle")({
 
 const profileHeaderButtonClass =
 	"inline-flex items-center justify-center gap-1.5 rounded-full border border-[var(--line-strong)] bg-[var(--bg)] px-4 py-1.5 text-[14px] font-bold text-[var(--ink)] shadow-sm transition-colors duration-150 hover:bg-[var(--bg-hover)] disabled:cursor-default disabled:opacity-55";
+const profileMentionRe = /(^|[^\w@./])@([A-Za-z0-9_]{1,15})\b/g;
 
 function stableHue(value: string) {
 	let hash = 0;
@@ -31,6 +36,76 @@ function ProfilesHandleRoute() {
 	return <ProfileRouteView handle={handle} />;
 }
 
+function profilesByHandleFromContext(context: ProfileAnalysisContext | null) {
+	const profilesByHandle = new Map<string, ProfileRecord>();
+	if (!context) return profilesByHandle;
+	profilesByHandle.set(context.profile.handle.toLowerCase(), context.profile);
+	for (const profile of context.profiles ?? []) {
+		profilesByHandle.set(profile.handle.toLowerCase(), profile);
+	}
+	for (const tweet of context.conversations) {
+		profilesByHandle.set(tweet.author.toLowerCase(), {
+			id: tweet.profileId,
+			handle: tweet.author,
+			displayName: tweet.name || tweet.author,
+			bio: tweet.bio,
+			followersCount: tweet.followersCount,
+			avatarHue: 210,
+			avatarUrl: tweet.avatarUrl,
+			createdAt: tweet.createdAt,
+		});
+	}
+	return profilesByHandle;
+}
+
+function ProfileBioText({
+	text,
+	profilesByHandle,
+}: {
+	text: string;
+	profilesByHandle: Map<string, ProfileRecord>;
+}) {
+	const nodes = [];
+	let cursor = 0;
+	for (const match of text.matchAll(profileMentionRe)) {
+		const index = (match.index ?? 0) + match[1].length;
+		const token = `@${match[2]}`;
+		const profile = profilesByHandle.get(match[2].toLowerCase());
+		if (index > cursor) nodes.push(text.slice(cursor, index));
+		nodes.push(
+			profile ? (
+				<ProfilePreview key={`${token}-${String(index)}`} profile={profile}>
+					<span className={tweetMentionClass}>{token}</span>
+				</ProfilePreview>
+			) : (
+				<a
+					key={`${token}-${String(index)}`}
+					className={tweetMentionClass}
+					href={`https://x.com/${token.slice(1)}`}
+					rel="noreferrer"
+					target="_blank"
+				>
+					{token}
+				</a>
+			),
+		);
+		cursor = index + token.length;
+	}
+	if (cursor < text.length) nodes.push(text.slice(cursor));
+
+	return (
+		<p className="m-0 max-w-2xl whitespace-pre-wrap text-[15px] leading-[1.45] text-[var(--ink)] [overflow-wrap:anywhere]">
+			{nodes.map((node, index) => (
+				<Fragment
+					key={typeof node === "string" ? `${node}-${String(index)}` : index}
+				>
+					{node}
+				</Fragment>
+			))}
+		</p>
+	);
+}
+
 export function ProfileRouteView({ handle }: { handle: string }) {
 	const cleanHandle = cleanProfileHandle(handle);
 	const analysis = useProfileAnalysisStream(cleanHandle);
@@ -39,6 +114,7 @@ export function ProfileRouteView({ handle }: { handle: string }) {
 	const profile = analysis.context?.profile;
 	const displayName = profile?.displayName || `@${cleanHandle}`;
 	const bio = profile?.bio ?? "";
+	const profilesByHandle = profilesByHandleFromContext(analysis.context);
 
 	useEffect(() => {
 		runAnalysisRef.current = analysis.run;
@@ -112,9 +188,7 @@ export function ProfileRouteView({ handle }: { handle: string }) {
 						</div>
 
 						{bio ? (
-							<p className="m-0 max-w-2xl whitespace-pre-wrap text-[15px] leading-[1.45] text-[var(--ink)] [overflow-wrap:anywhere]">
-								{bio}
-							</p>
+							<ProfileBioText profilesByHandle={profilesByHandle} text={bio} />
 						) : null}
 
 						<div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--ink-soft)]">

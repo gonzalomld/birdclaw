@@ -80,6 +80,7 @@ export interface ProfileAnalysisContext {
 	accountId: string;
 	accountHandle: string;
 	profile: ProfileRecord;
+	profiles?: ProfileRecord[];
 	externalUserId: string;
 	tweets: CompactProfileTweet[];
 	conversations: CompactConversationTweet[];

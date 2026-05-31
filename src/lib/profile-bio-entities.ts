@@ -9,7 +9,7 @@ interface ExtractedBioEntity {
 	raw: Record<string, unknown>;
 }
 
-const HANDLE_RE = /(^|[^\w])@([A-Za-z0-9_]{1,15})\b/g;
+const HANDLE_RE = /(^|[^\w@./])@([A-Za-z0-9_]{1,15})\b/g;
 const DOMAIN_RE =
 	/\b(?:https?:\/\/)?(?:www\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)\b/gi;
 const COMPANY_RE =

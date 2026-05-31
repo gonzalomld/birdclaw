@@ -102,6 +102,18 @@ const profileAnalysisContext = {
 		avatarHue: 18,
 		createdAt: "2009-03-19T22:54:05.000Z",
 	},
+	profiles: [
+		{
+			id: "profile_openai",
+			handle: "OpenAI",
+			displayName: "OpenAI",
+			bio: "AI research and products.",
+			followersCount: 7_000_000,
+			avatarHue: 160,
+			avatarUrl: "https://pbs.twimg.com/profile_images/openai_normal.jpg",
+			createdAt: "2015-12-11T00:00:00.000Z",
+		},
+	],
 	externalUserId: "123",
 	tweets: [
 		{
@@ -224,13 +236,17 @@ describe("MarkdownViewer", () => {
 		expect(screen.queryByText(/2055858095759229148/)).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("link", {
-				name: "Peter explicitly says he works at OpenAI and describes the OpenClaw team structure",
+				name: "Peter explicitly says he works at OpenAI",
 			}),
 		).toHaveAttribute(
 			"href",
 			"https://x.com/steipete/status/2055621934319030779",
 		);
-		expect(screen.getByRole("link", { name: "source 2" })).toHaveAttribute(
+		expect(
+			screen.getByRole("link", {
+				name: "describes the OpenClaw team structure",
+			}),
+		).toHaveAttribute(
 			"href",
 			"https://x.com/openclaw/status/2055858095759229148",
 		);
@@ -310,16 +326,21 @@ describe("MarkdownViewer", () => {
 		).not.toBeInTheDocument();
 		expect(
 			screen.getByRole("link", {
-				name: "with BYOK access to Opus, GPT-5.5, Gemini 3, and 500+ models at provider cost",
+				name: "says StepFun is widely used, with BYOK access to Opus, GPT-5.5, Gemini 3",
 			}),
 		).toHaveAttribute(
 			"href",
 			"https://x.com/kilocode/status/2057574939775938900",
 		);
-		expect(screen.getByRole("link", { name: "source 2" })).toHaveAttribute(
+		expect(
+			screen.getByRole("link", {
+				name: "500+ models at provider cost",
+			}),
+		).toHaveAttribute(
 			"href",
 			"https://x.com/kilocode/status/2057578665408434460",
 		);
+		expect(screen.queryByRole("link", { name: "source 2" })).toBeNull();
 	});
 
 	it("keeps mixed unresolved grouped tweet citations visible", () => {
@@ -350,8 +371,12 @@ describe("MarkdownViewer", () => {
 			/>,
 		);
 
-		expect(screen.queryByText(/tweet_2057574939775938900/)).not.toBeInTheDocument();
-		expect(screen.getByText("(tweet_missing)", { exact: false })).toBeInTheDocument();
+		expect(
+			screen.queryByText(/tweet_2057574939775938900/),
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByText("(tweet_missing)", { exact: false }),
+		).toBeInTheDocument();
 	});
 
 	it("links unresolved numeric citations without leaking raw ids", () => {
@@ -403,6 +428,56 @@ describe("MarkdownViewer", () => {
 			"https://x.com/vincent_koc/status/2061001416454439313",
 		);
 		expect(screen.queryByRole("link", { name: "source" })).toBeNull();
+	});
+
+	it("links adjacent profile citations to readable clauses when possible", () => {
+		render(
+			<MarkdownViewer
+				context={profileAnalysisContext}
+				markdown={
+					"Peter discusses OpenAI, OpenClaw, and support workflows (2055621934319030779) (2055858095759229148) (2061001416454439313)."
+				}
+			/>,
+		);
+
+		expect(
+			screen.getByRole("link", { name: "Peter discusses OpenAI" }),
+		).toHaveAttribute(
+			"href",
+			"https://x.com/steipete/status/2055621934319030779",
+		);
+		expect(screen.getByRole("link", { name: "OpenClaw" })).toHaveAttribute(
+			"href",
+			"https://x.com/openclaw/status/2055858095759229148",
+		);
+		expect(
+			screen.getByRole("link", { name: "support workflows" }),
+		).toHaveAttribute(
+			"href",
+			"https://x.com/vincent_koc/status/2061001416454439313",
+		);
+		expect(screen.queryByRole("link", { name: "source 2" })).toBeNull();
+		expect(screen.queryByRole("link", { name: "source 3" })).toBeNull();
+	});
+
+	it("renders hydrated profile mentions with profile previews", () => {
+		render(
+			<MarkdownViewer
+				context={profileAnalysisContext}
+				markdown={"He works with @OpenAI and @openclaw on agent tooling."}
+			/>,
+		);
+
+		expect(screen.getByRole("link", { name: "@OpenAI" })).toHaveAttribute(
+			"href",
+			"https://x.com/OpenAI",
+		);
+		expect(screen.getByRole("link", { name: "@openclaw" })).toHaveAttribute(
+			"href",
+			"https://x.com/openclaw",
+		);
+		expect(screen.getByText("AI research and products.")).toBeInTheDocument();
+		expect(screen.getByText("Agent tooling")).toBeInTheDocument();
 	});
 
 	it("links standalone unresolved numeric citations", () => {

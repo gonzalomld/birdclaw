@@ -34,7 +34,7 @@ describe("profile bio entities", () => {
 				id: "profile_user_42",
 				handle: "aditya",
 				displayName: "Aditya",
-				bio: "Co-founder at @useblacksmith. Building https://blacksmith.sh",
+				bio: "Co-founder at @useblacksmith. Building https://blacksmith.sh. Contact hello@blacksmith.sh",
 				followersCount: 100,
 				avatarHue: 10,
 				url: "https://www.blacksmith.sh/team",
@@ -50,6 +50,17 @@ describe("profile bio entities", () => {
 				expect.objectContaining({ kind: "domain", value: "blacksmith.sh" }),
 			]),
 		);
+		expect(
+			extractProfileBioEntities({
+				id: "profile_user_43",
+				handle: "support",
+				displayName: "Support",
+				bio: "Contact hello@openai.com or @OpenAI",
+				followersCount: 100,
+				avatarHue: 20,
+				createdAt: "2026-05-01T00:00:00.000Z",
+			}).filter((entity) => entity.kind === "handle"),
+		).toEqual([expect.objectContaining({ value: "@OpenAI" })]);
 	});
 
 	it("extracts profile URL entities and affiliation hints while deduplicating", () => {
