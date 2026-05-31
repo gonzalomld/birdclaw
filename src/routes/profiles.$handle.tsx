@@ -54,11 +54,17 @@ export function ProfileRouteView({ handle }: { handle: string }) {
 	return (
 		<section className="flex min-h-screen flex-col">
 			<header className="border-b border-[var(--line)] bg-[var(--bg)]">
-				<div className="relative overflow-hidden px-4 py-6">
-					<div className="absolute inset-x-0 top-0 h-44 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--bg-active)_88%,var(--accent)_12%),var(--bg))]" />
-					<div className="relative flex flex-col gap-4">
-						<div className="flex items-end justify-between gap-3 pt-12">
-							<div className="flex min-w-0 items-end gap-3">
+				<div
+					className="h-32 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--bg-active)_68%,var(--accent)_32%),color-mix(in_srgb,var(--bg)_70%,var(--accent)_30%))]"
+					data-testid="profile-cover"
+				/>
+				<div className="px-4 pb-5">
+					<div className="flex flex-col gap-4">
+						<div
+							className="-mt-8 flex items-start justify-between gap-3"
+							data-testid="profile-avatar-overlap"
+						>
+							<div className="flex min-w-0 items-start gap-3">
 								<span className="inline-grid rounded-full ring-4 ring-[var(--bg)]">
 									<AvatarChip
 										avatarUrl={profile?.avatarUrl ?? undefined}
@@ -68,7 +74,7 @@ export function ProfileRouteView({ handle }: { handle: string }) {
 										size="large"
 									/>
 								</span>
-								<div className="min-w-0 pb-1">
+								<div className="min-w-0 pb-1 pt-9">
 									<h1 className="m-0 truncate text-[24px] font-bold text-[var(--ink)]">
 										{displayName}
 									</h1>
@@ -77,7 +83,7 @@ export function ProfileRouteView({ handle }: { handle: string }) {
 									</div>
 								</div>
 							</div>
-							<div className="flex shrink-0 items-center gap-2">
+							<div className="mt-10 flex shrink-0 items-center gap-2">
 								<a
 									className={profileHeaderButtonClass}
 									href={`https://x.com/${encodeURIComponent(profile?.handle ?? cleanHandle)}`}

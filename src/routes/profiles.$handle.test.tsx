@@ -80,6 +80,8 @@ describe("profile route", () => {
 		render(<ProfileRouteView handle="steipete" />);
 
 		expect(await screen.findByText("Peter Steinberger")).toBeInTheDocument();
+		expect(screen.getByTestId("profile-cover")).toHaveClass("h-32");
+		expect(screen.getByTestId("profile-avatar-overlap")).toHaveClass("-mt-8");
 		expect(screen.getByText("@steipete")).toBeInTheDocument();
 		expect(
 			screen.getByText("Builder of agentic software."),
