@@ -10,6 +10,7 @@ import {
 	Mail,
 	MessagesSquare,
 	ShieldOff,
+	UserSearch,
 } from "lucide-react";
 import {
 	cx,
@@ -38,6 +39,7 @@ const links = [
 	{ to: "/inbox", label: "Inbox", icon: Inbox },
 	{ to: "/today", label: "Today", icon: CalendarDays },
 	{ to: "/discuss", label: "Discuss", icon: MessagesSquare },
+	{ to: "/profile-analyze", label: "Analyse", icon: UserSearch },
 	{ to: "/", label: "Home", icon: Home },
 	{ to: "/mentions", label: "Mentions", icon: Bell },
 	{ to: "/likes", label: "Likes", icon: Heart },

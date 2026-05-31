@@ -48,6 +48,8 @@ describe("xurl transport wrapper", () => {
 		execFileAsyncMock.mockReset();
 		delete process.env.BIRDCLAW_DISABLE_LIVE_WRITES;
 		delete process.env.BIRDCLAW_XURL_RETRY_BASE_MS;
+		delete process.env.BIRDCLAW_XURL_OAUTH2_APP;
+		delete process.env.BIRDCLAW_XURL_OAUTH2_USERNAME;
 	});
 
 	it("falls back to local mode when xurl is missing", async () => {
@@ -529,6 +531,32 @@ describe("xurl transport wrapper", () => {
 			"--username",
 			"openclaw-steipete",
 			`/2/users/25401953/timelines/reverse_chronological?max_results=100&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=created_at%2Cconversation_id%2Centities%2Cpublic_metrics%2Creferenced_tweets&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
+		]);
+	});
+
+	it("honors explicit OAuth2 app and username overrides", async () => {
+		process.env.BIRDCLAW_XURL_OAUTH2_APP = "xurl-steipete";
+		process.env.BIRDCLAW_XURL_OAUTH2_USERNAME = "openclaw";
+		execFileAsyncMock.mockResolvedValueOnce({
+			stdout: JSON.stringify({ data: [] }),
+			stderr: "",
+		});
+		const { searchRecentByConversationId } = await import("./xurl");
+
+		await searchRecentByConversationId("123", {
+			maxResults: 100,
+			auth: "oauth2",
+			username: "steipete",
+		});
+
+		expect(execFileAsyncMock).toHaveBeenCalledWith("xurl", [
+			"--app",
+			"xurl-steipete",
+			"--auth",
+			"oauth2",
+			"--username",
+			"openclaw",
+			`/2/tweets/search/recent?query=conversation_id%3A123&max_results=100&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=${THREAD_TWEET_FIELDS}&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
 		]);
 	});
 

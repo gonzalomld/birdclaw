@@ -1000,6 +1000,7 @@ export function syncAuthoredTweetsEffect({
 					userFields: AUTHORED_USER_FIELDS,
 					mediaFields: AUTHORED_MEDIA_FIELDS,
 					auth: "oauth2",
+					username: identity.username,
 				}),
 			).pipe(
 				Effect.map((page) => ({ ok: true as const, page })),

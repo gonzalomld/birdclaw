@@ -397,6 +397,17 @@ birdclaw discuss "sync engine" --question "what changed over time?"
 birdclaw discuss "prototype" --include-dms --limit 500 --max-pages 5 --json
 ```
 
+### Profile analysis
+
+`birdclaw profile-analyze` resolves a profile through `xurl`, walks as much of the retrievable timeline as the API allows, backfills high-signal conversations, caches both the fetched context and AI result in SQLite, and writes a Markdown profile brief.
+
+When `xurl` has multiple OAuth2 labels, set `BIRDCLAW_XURL_OAUTH2_APP` and `BIRDCLAW_XURL_OAUTH2_USERNAME` to force the known-good token.
+
+```bash
+birdclaw profile-analyze steipete
+birdclaw profile-analyse openai --max-pages 20 --max-conversations 40 --json
+```
+
 ### What happened today
 
 `birdclaw today` streams a local "what happened" digest from the SQLite store. It uses the OpenAI Responses API with `gpt-5.5`, medium reasoning, and priority service tier by default. Set `OPENAI_API_KEY`; override with `BIRDCLAW_AI_MODEL`, `BIRDCLAW_OPENAI_REASONING_EFFORT`, or `BIRDCLAW_OPENAI_SERVICE_TIER` when needed.

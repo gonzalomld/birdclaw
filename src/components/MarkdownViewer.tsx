@@ -1,14 +1,18 @@
 import { Fragment, type ReactNode, useState } from "react";
 import { formatCompactNumber, formatShortTimestamp } from "#/lib/present";
 import type { PeriodDigestContext } from "#/lib/period-digest";
+import type { ProfileAnalysisContext } from "#/lib/profile-analysis";
 import type { ProfileRecord } from "#/lib/types";
 import { cx, tweetLinkClass, tweetMentionClass } from "#/lib/ui";
 import { safeHttpUrl } from "#/lib/url-safety";
 import { AvatarChip } from "./AvatarChip";
 import { ProfilePreview } from "./ProfilePreview";
 
+type CitationTweet = PeriodDigestContext["tweets"][number];
+type CitationContext = PeriodDigestContext | ProfileAnalysisContext;
+
 type InlineLookup = {
-	tweetsById: Map<string, PeriodDigestContext["tweets"][number]>;
+	tweetsById: Map<string, CitationTweet>;
 	profilesByHandle: Map<string, ProfileRecord>;
 };
 
@@ -60,7 +64,7 @@ function trimBullet(value: string) {
 	return value.replace(/^[-*]\s+/, "");
 }
 
-function getTweetUrl(tweet: PeriodDigestContext["tweets"][number]) {
+function getTweetUrl(tweet: CitationTweet) {
 	return tweet.url || `https://x.com/${tweet.author}/status/${tweet.id}`;
 }
 
@@ -68,7 +72,7 @@ function TweetPreviewToken({
 	tweet,
 	children,
 }: {
-	tweet: PeriodDigestContext["tweets"][number];
+	tweet: CitationTweet;
 	children: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -135,7 +139,7 @@ function TweetPreviewToken({
 }
 
 function additionalCitationLinks(
-	tweets: Array<PeriodDigestContext["tweets"][number]>,
+	tweets: CitationTweet[],
 	key: string,
 ) {
 	return tweets.slice(1).flatMap((tweet, index) => [
@@ -147,7 +151,7 @@ function additionalCitationLinks(
 }
 
 function fallbackCitationLinks(
-	tweets: Array<PeriodDigestContext["tweets"][number]>,
+	tweets: CitationTweet[],
 	key: string,
 ) {
 	return tweets.flatMap((tweet, index) => [
@@ -163,7 +167,7 @@ function fallbackCitationLinks(
 
 function linkTrailingCitationText(
 	nodes: ReactNode[],
-	tweets: Array<PeriodDigestContext["tweets"][number]>,
+	tweets: CitationTweet[],
 	key: string,
 ) {
 	const tweet = tweets[0];
@@ -282,7 +286,7 @@ function renderInline(text: string, lookup: InlineLookup) {
 		const allReferencesResolved =
 			references.length > 0 && resolvedTweets.every(Boolean);
 		const tweets = resolvedTweets.filter(
-			(tweet): tweet is PeriodDigestContext["tweets"][number] => Boolean(tweet),
+			(tweet): tweet is CitationTweet => Boolean(tweet),
 		);
 		const tweet = tweets[0];
 		const isParenthesizedTweetRef =
@@ -336,14 +340,104 @@ function renderInline(text: string, lookup: InlineLookup) {
 	));
 }
 
-function buildLookup(context?: PeriodDigestContext | null): InlineLookup {
-	const tweetsById = new Map<string, PeriodDigestContext["tweets"][number]>();
+function isProfileAnalysisContext(
+	context: CitationContext,
+): context is ProfileAnalysisContext {
+	return "conversations" in context && "profile" in context;
+}
+
+function addLookupTweet(
+	tweetsById: Map<string, CitationTweet>,
+	profilesByHandle: Map<string, ProfileRecord>,
+	tweet: CitationTweet,
+) {
+	const normalized = normalizeTweetReference(tweet.id);
+	tweetsById.set(normalized, tweet);
+	tweetsById.set(`tweet_${normalized}`, tweet);
+	profilesByHandle.set(tweet.author.toLowerCase(), tweet.authorProfile);
+}
+
+function syntheticProfileForConversationTweet(
+	tweet: ProfileAnalysisContext["conversations"][number],
+): ProfileRecord {
+	return {
+		id: tweet.profileId,
+		handle: tweet.author,
+		displayName: tweet.name || tweet.author,
+		bio: tweet.bio,
+		followersCount: tweet.followersCount,
+		avatarHue: 210,
+		avatarUrl: tweet.avatarUrl,
+		createdAt: tweet.createdAt,
+	};
+}
+
+function profileAnalysisTweetToCitation(
+	tweet: ProfileAnalysisContext["tweets"][number],
+	profile: ProfileRecord,
+): CitationTweet {
+	return {
+		id: tweet.id,
+		url: tweet.url,
+		source: "authored",
+		author: profile.handle,
+		name: profile.displayName,
+		authorProfile: profile,
+		createdAt: tweet.createdAt,
+		text: tweet.text,
+		likeCount: tweet.likeCount,
+		liked: false,
+		bookmarked: false,
+		needsReply: false,
+	};
+}
+
+function conversationTweetToCitation(
+	tweet: ProfileAnalysisContext["conversations"][number],
+): CitationTweet {
+	const authorProfile = syntheticProfileForConversationTweet(tweet);
+	return {
+		id: tweet.id,
+		url: tweet.url,
+		source: "mentions",
+		author: tweet.author,
+		name: tweet.name || tweet.author,
+		authorProfile,
+		createdAt: tweet.createdAt,
+		text: tweet.text,
+		likeCount: tweet.likeCount,
+		liked: false,
+		bookmarked: false,
+		needsReply: false,
+	};
+}
+
+function buildLookup(context?: CitationContext | null): InlineLookup {
+	const tweetsById = new Map<string, CitationTweet>();
 	const profilesByHandle = new Map<string, ProfileRecord>();
-	for (const tweet of context?.tweets ?? []) {
-		const normalized = normalizeTweetReference(tweet.id);
-		tweetsById.set(normalized, tweet);
-		tweetsById.set(`tweet_${normalized}`, tweet);
-		profilesByHandle.set(tweet.author.toLowerCase(), tweet.authorProfile);
+	if (!context) {
+		return { tweetsById, profilesByHandle };
+	}
+	if (isProfileAnalysisContext(context)) {
+		profilesByHandle.set(context.profile.handle.toLowerCase(), context.profile);
+		for (const tweet of context.tweets) {
+			addLookupTweet(
+				tweetsById,
+				profilesByHandle,
+				profileAnalysisTweetToCitation(tweet, context.profile),
+			);
+		}
+		for (const tweet of context.conversations) {
+			addLookupTweet(
+				tweetsById,
+				profilesByHandle,
+				conversationTweetToCitation(tweet),
+			);
+		}
+		return { tweetsById, profilesByHandle };
+	}
+	for (const tweet of context.tweets) {
+		addLookupTweet(tweetsById, profilesByHandle, tweet);
 	}
 	return { tweetsById, profilesByHandle };
 }
@@ -354,7 +448,7 @@ export function MarkdownViewer({
 	className,
 }: {
 	markdown: string;
-	context?: PeriodDigestContext | null;
+	context?: CitationContext | null;
 	className?: string;
 }) {
 	const lookup = buildLookup(context);

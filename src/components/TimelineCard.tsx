@@ -6,6 +6,7 @@ import {
 	Image,
 	MessageCircle,
 	Repeat2,
+	UserSearch,
 } from "lucide-react";
 import { formatCompactNumber, formatShortTimestamp } from "#/lib/present";
 import type {
@@ -444,6 +445,22 @@ export function TimelineCard({
 								<span className="text-[13px]">Reply</span>
 							</button>
 						) : null}
+						<a
+							aria-label={`Analyse @${displayAuthor.handle}`}
+							className={feedActionButtonClass}
+							href={`/profile-analyze?handle=${encodeURIComponent(
+								displayAuthor.handle,
+							)}`}
+							onClick={(event) => {
+								event.stopPropagation();
+							}}
+							title={`Analyse @${displayAuthor.handle}`}
+						>
+							<span className={feedActionIconWrapClass}>
+								<UserSearch className={feedActionIconClass} strokeWidth={1.7} />
+							</span>
+							<span className="text-[13px]">Analyse</span>
+						</a>
 						{showLikeIndicator ? (
 							<span
 								aria-label={`${formatCompactNumber(displayLikeCount)} likes`}

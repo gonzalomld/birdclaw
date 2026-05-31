@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TodayRouteImport } from './routes/today'
+import { Route as ProfileAnalyzeRouteImport } from './routes/profile-analyze'
 import { Route as MentionsRouteImport } from './routes/mentions'
 import { Route as LinksRouteImport } from './routes/links'
 import { Route as LikesRouteImport } from './routes/likes'
@@ -24,6 +25,7 @@ import { Route as ApiStatusRouteImport } from './routes/api/status'
 import { Route as ApiSearchDiscussionRouteImport } from './routes/api/search-discussion'
 import { Route as ApiQueryRouteImport } from './routes/api/query'
 import { Route as ApiProfileHydrateRouteImport } from './routes/api/profile-hydrate'
+import { Route as ApiProfileAnalysisRouteImport } from './routes/api/profile-analysis'
 import { Route as ApiPeriodDigestRouteImport } from './routes/api/period-digest'
 import { Route as ApiLinkPreviewRouteImport } from './routes/api/link-preview'
 import { Route as ApiLinkInsightsRouteImport } from './routes/api/link-insights'
@@ -36,6 +38,11 @@ import { Route as ApiActionRouteImport } from './routes/api/action'
 const TodayRoute = TodayRouteImport.update({
   id: '/today',
   path: '/today',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileAnalyzeRoute = ProfileAnalyzeRouteImport.update({
+  id: '/profile-analyze',
+  path: '/profile-analyze',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MentionsRoute = MentionsRouteImport.update({
@@ -108,6 +115,11 @@ const ApiProfileHydrateRoute = ApiProfileHydrateRouteImport.update({
   path: '/api/profile-hydrate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProfileAnalysisRoute = ApiProfileAnalysisRouteImport.update({
+  id: '/api/profile-analysis',
+  path: '/api/profile-analysis',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPeriodDigestRoute = ApiPeriodDigestRouteImport.update({
   id: '/api/period-digest',
   path: '/api/period-digest',
@@ -159,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/likes': typeof LikesRoute
   '/links': typeof LinksRoute
   '/mentions': typeof MentionsRoute
+  '/profile-analyze': typeof ProfileAnalyzeRoute
   '/today': typeof TodayRoute
   '/api/action': typeof ApiActionRoute
   '/api/avatar': typeof ApiAvatarRoute
@@ -168,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/api/link-insights': typeof ApiLinkInsightsRoute
   '/api/link-preview': typeof ApiLinkPreviewRoute
   '/api/period-digest': typeof ApiPeriodDigestRoute
+  '/api/profile-analysis': typeof ApiProfileAnalysisRoute
   '/api/profile-hydrate': typeof ApiProfileHydrateRoute
   '/api/query': typeof ApiQueryRoute
   '/api/search-discussion': typeof ApiSearchDiscussionRoute
@@ -184,6 +198,7 @@ export interface FileRoutesByTo {
   '/likes': typeof LikesRoute
   '/links': typeof LinksRoute
   '/mentions': typeof MentionsRoute
+  '/profile-analyze': typeof ProfileAnalyzeRoute
   '/today': typeof TodayRoute
   '/api/action': typeof ApiActionRoute
   '/api/avatar': typeof ApiAvatarRoute
@@ -193,6 +208,7 @@ export interface FileRoutesByTo {
   '/api/link-insights': typeof ApiLinkInsightsRoute
   '/api/link-preview': typeof ApiLinkPreviewRoute
   '/api/period-digest': typeof ApiPeriodDigestRoute
+  '/api/profile-analysis': typeof ApiProfileAnalysisRoute
   '/api/profile-hydrate': typeof ApiProfileHydrateRoute
   '/api/query': typeof ApiQueryRoute
   '/api/search-discussion': typeof ApiSearchDiscussionRoute
@@ -210,6 +226,7 @@ export interface FileRoutesById {
   '/likes': typeof LikesRoute
   '/links': typeof LinksRoute
   '/mentions': typeof MentionsRoute
+  '/profile-analyze': typeof ProfileAnalyzeRoute
   '/today': typeof TodayRoute
   '/api/action': typeof ApiActionRoute
   '/api/avatar': typeof ApiAvatarRoute
@@ -219,6 +236,7 @@ export interface FileRoutesById {
   '/api/link-insights': typeof ApiLinkInsightsRoute
   '/api/link-preview': typeof ApiLinkPreviewRoute
   '/api/period-digest': typeof ApiPeriodDigestRoute
+  '/api/profile-analysis': typeof ApiProfileAnalysisRoute
   '/api/profile-hydrate': typeof ApiProfileHydrateRoute
   '/api/query': typeof ApiQueryRoute
   '/api/search-discussion': typeof ApiSearchDiscussionRoute
@@ -237,6 +255,7 @@ export interface FileRouteTypes {
     | '/likes'
     | '/links'
     | '/mentions'
+    | '/profile-analyze'
     | '/today'
     | '/api/action'
     | '/api/avatar'
@@ -246,6 +265,7 @@ export interface FileRouteTypes {
     | '/api/link-insights'
     | '/api/link-preview'
     | '/api/period-digest'
+    | '/api/profile-analysis'
     | '/api/profile-hydrate'
     | '/api/query'
     | '/api/search-discussion'
@@ -262,6 +282,7 @@ export interface FileRouteTypes {
     | '/likes'
     | '/links'
     | '/mentions'
+    | '/profile-analyze'
     | '/today'
     | '/api/action'
     | '/api/avatar'
@@ -271,6 +292,7 @@ export interface FileRouteTypes {
     | '/api/link-insights'
     | '/api/link-preview'
     | '/api/period-digest'
+    | '/api/profile-analysis'
     | '/api/profile-hydrate'
     | '/api/query'
     | '/api/search-discussion'
@@ -287,6 +309,7 @@ export interface FileRouteTypes {
     | '/likes'
     | '/links'
     | '/mentions'
+    | '/profile-analyze'
     | '/today'
     | '/api/action'
     | '/api/avatar'
@@ -296,6 +319,7 @@ export interface FileRouteTypes {
     | '/api/link-insights'
     | '/api/link-preview'
     | '/api/period-digest'
+    | '/api/profile-analysis'
     | '/api/profile-hydrate'
     | '/api/query'
     | '/api/search-discussion'
@@ -313,6 +337,7 @@ export interface RootRouteChildren {
   LikesRoute: typeof LikesRoute
   LinksRoute: typeof LinksRoute
   MentionsRoute: typeof MentionsRoute
+  ProfileAnalyzeRoute: typeof ProfileAnalyzeRoute
   TodayRoute: typeof TodayRoute
   ApiActionRoute: typeof ApiActionRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
@@ -322,6 +347,7 @@ export interface RootRouteChildren {
   ApiLinkInsightsRoute: typeof ApiLinkInsightsRoute
   ApiLinkPreviewRoute: typeof ApiLinkPreviewRoute
   ApiPeriodDigestRoute: typeof ApiPeriodDigestRoute
+  ApiProfileAnalysisRoute: typeof ApiProfileAnalysisRoute
   ApiProfileHydrateRoute: typeof ApiProfileHydrateRoute
   ApiQueryRoute: typeof ApiQueryRoute
   ApiSearchDiscussionRoute: typeof ApiSearchDiscussionRoute
@@ -336,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/today'
       fullPath: '/today'
       preLoaderRoute: typeof TodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile-analyze': {
+      id: '/profile-analyze'
+      path: '/profile-analyze'
+      fullPath: '/profile-analyze'
+      preLoaderRoute: typeof ProfileAnalyzeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mentions': {
@@ -436,6 +469,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProfileHydrateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/profile-analysis': {
+      id: '/api/profile-analysis'
+      path: '/api/profile-analysis'
+      fullPath: '/api/profile-analysis'
+      preLoaderRoute: typeof ApiProfileAnalysisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/period-digest': {
       id: '/api/period-digest'
       path: '/api/period-digest'
@@ -505,6 +545,7 @@ const rootRouteChildren: RootRouteChildren = {
   LikesRoute: LikesRoute,
   LinksRoute: LinksRoute,
   MentionsRoute: MentionsRoute,
+  ProfileAnalyzeRoute: ProfileAnalyzeRoute,
   TodayRoute: TodayRoute,
   ApiActionRoute: ApiActionRoute,
   ApiAvatarRoute: ApiAvatarRoute,
@@ -514,6 +555,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLinkInsightsRoute: ApiLinkInsightsRoute,
   ApiLinkPreviewRoute: ApiLinkPreviewRoute,
   ApiPeriodDigestRoute: ApiPeriodDigestRoute,
+  ApiProfileAnalysisRoute: ApiProfileAnalysisRoute,
   ApiProfileHydrateRoute: ApiProfileHydrateRoute,
   ApiQueryRoute: ApiQueryRoute,
   ApiSearchDiscussionRoute: ApiSearchDiscussionRoute,

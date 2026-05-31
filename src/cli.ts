@@ -67,6 +67,10 @@ import {
 	type PeriodDigestPreset,
 } from "#/lib/period-digest";
 import {
+	streamProfileAnalysis,
+	type ProfileAnalysisOptions,
+} from "#/lib/profile-analysis";
+import {
 	getFollowGraphSummary,
 	listFollowEvents,
 	listMutuals,
@@ -519,6 +523,91 @@ function runSearchDiscussionCli(options: SearchDiscussionOptions) {
 			? undefined
 			: (delta) => {
 					process.stdout.write(delta);
+				},
+	}).then((result) => {
+		if (asJson) {
+			print(result, true);
+			return;
+		}
+		if (!result.markdown.endsWith("\n")) {
+			process.stdout.write("\n");
+		}
+	});
+}
+
+function buildProfileAnalysisOptions(
+	handle: string,
+	options: {
+		account?: string;
+		model?: string;
+		refresh?: boolean;
+		maxTweets?: string;
+		maxPages?: string;
+		maxConversations?: string;
+		maxConversationPages?: string;
+	},
+): ProfileAnalysisOptions | null {
+	const maxTweets = parsePositiveIntegerOption(
+		options.maxTweets,
+		"--max-tweets",
+	);
+	if (options.maxTweets !== undefined && maxTweets === undefined) {
+		return null;
+	}
+	const maxPages = parsePositiveIntegerOption(options.maxPages, "--max-pages");
+	if (options.maxPages !== undefined && maxPages === undefined) {
+		return null;
+	}
+	const maxConversations = parsePositiveIntegerOption(
+		options.maxConversations,
+		"--max-conversations",
+	);
+	if (
+		options.maxConversations !== undefined &&
+		maxConversations === undefined
+	) {
+		return null;
+	}
+	const maxConversationPages = parsePositiveIntegerOption(
+		options.maxConversationPages,
+		"--max-conversation-pages",
+	);
+	if (
+		options.maxConversationPages !== undefined &&
+		maxConversationPages === undefined
+	) {
+		return null;
+	}
+	return {
+		handle,
+		account: options.account,
+		model: options.model,
+		refresh: Boolean(options.refresh),
+		maxTweets,
+		maxPages,
+		maxConversations,
+		maxConversationPages,
+	};
+}
+
+function runProfileAnalysisCli(options: ProfileAnalysisOptions) {
+	const asJson = Boolean(program.opts().json);
+	return streamProfileAnalysis(options, {
+		onDelta: asJson
+			? undefined
+			: (delta) => {
+					process.stdout.write(delta);
+				},
+		onEvent: asJson
+			? undefined
+			: (event) => {
+					if (event.type === "status") {
+						process.stderr.write(
+							event.detail
+								? `${event.label}: ${event.detail}\n`
+								: `${event.label}\n`,
+						);
+					}
 				},
 	}).then((result) => {
 		if (asJson) {
@@ -1107,6 +1196,24 @@ program
 		const discussionOptions = buildSearchDiscussionOptions(query, options);
 		if (!discussionOptions) return;
 		await runSearchDiscussionCli(discussionOptions);
+	});
+
+program
+	.command("profile-analyze <handle>")
+	.alias("profile-analyse")
+	.description("Backfill a profile with xurl and summarize it with AI")
+	.option("--account <accountId>", "Account id")
+	.option("--model <model>", "OpenAI model id")
+	.option("--refresh", "Bypass profile fetch and analysis caches")
+	.option("--max-tweets <n>", "Maximum profile tweets", "10000")
+	.option("--max-pages <n>", "Maximum profile timeline pages", "100")
+	.option("--max-conversations <n>", "Maximum conversations to backfill", "80")
+	.option("--max-conversation-pages <n>", "Maximum pages per conversation", "3")
+	.action(async (handle, options) => {
+		await autoUpdateBeforeRead();
+		const analysisOptions = buildProfileAnalysisOptions(handle, options);
+		if (!analysisOptions) return;
+		await runProfileAnalysisCli(analysisOptions);
 	});
 
 program

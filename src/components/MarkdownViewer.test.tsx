@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PeriodDigestContext } from "#/lib/period-digest";
+import type { ProfileAnalysisContext } from "#/lib/profile-analysis";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 const authorProfile = {
@@ -88,6 +89,65 @@ const context = {
 	hash: "demo",
 } satisfies PeriodDigestContext;
 
+const profileAnalysisContext = {
+	handle: "steipete",
+	accountId: "account_steipete",
+	accountHandle: "steipete",
+	profile: {
+		id: "profile_steipete",
+		handle: "steipete",
+		displayName: "Peter Steinberger",
+		bio: "Builder",
+		followersCount: 123,
+		avatarHue: 18,
+		createdAt: "2009-03-19T22:54:05.000Z",
+	},
+	externalUserId: "123",
+	tweets: [
+		{
+			id: "2055621934319030779",
+			url: "https://x.com/steipete/status/2055621934319030779",
+			author: "steipete",
+			createdAt: "2026-05-28T09:12:00.000Z",
+			text: "I work at OpenAI and build coding agents.",
+			likeCount: 50,
+			replyCount: 4,
+			retweetCount: 3,
+			quoteCount: 1,
+			bookmarkedCount: 9,
+		},
+	],
+	conversations: [
+		{
+			id: "2055858095759229148",
+			url: "https://x.com/openclaw/status/2055858095759229148",
+			author: "openclaw",
+			createdAt: "2026-05-28T10:12:00.000Z",
+			text: "OpenClaw Foundation/team context.",
+			likeCount: 12,
+			replyCount: 2,
+			retweetCount: 1,
+			quoteCount: 0,
+			bookmarkedCount: 3,
+			conversationRootId: "2055858095759229148",
+			profileId: "profile_user_42",
+			name: "OpenClaw",
+			bio: "Agent tooling",
+			followersCount: 456,
+			avatarUrl: "https://pbs.twimg.com/profile_images/openclaw_normal.jpg",
+		},
+	],
+	counts: {
+		tweets: 1,
+		tweetPages: 1,
+		conversationsScanned: 1,
+		conversationTweets: 1,
+		conversationPages: 1,
+	},
+	fetchCached: true,
+	hash: "profile-demo",
+} satisfies ProfileAnalysisContext;
+
 describe("MarkdownViewer", () => {
 	afterEach(cleanup);
 
@@ -130,6 +190,40 @@ describe("MarkdownViewer", () => {
 				name: "“autonomous agents running on goAT”",
 			}),
 		).not.toHaveClass("font-mono");
+	});
+
+	it("links profile analysis numeric citations from its profile context", () => {
+		render(
+			<MarkdownViewer
+				context={profileAnalysisContext}
+				markdown={
+					"Peter explicitly says he works at OpenAI and describes the OpenClaw team structure (2055621934319030779) (2055858095759229148)."
+				}
+			/>,
+		);
+
+		expect(
+			screen.queryByText(/2055621934319030779/),
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByText(/2055858095759229148/),
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("link", {
+				name: "Peter explicitly says he works at OpenAI and describes the OpenClaw team structure",
+			}),
+		).toHaveAttribute(
+			"href",
+			"https://x.com/steipete/status/2055621934319030779",
+		);
+		expect(screen.getByRole("link", { name: "source" })).toHaveAttribute(
+			"href",
+			"https://x.com/openclaw/status/2055858095759229148",
+		);
+		expect(screen.getByAltText("OpenClaw")).toHaveAttribute(
+			"src",
+			"/api/avatar?profileId=profile_user_42&v=https%3A%2F%2Fpbs.twimg.com%2Fprofile_images%2Fopenclaw_normal.jpg",
+		);
 	});
 
 	it("renders normal markdown links without changing the surrounding text font", () => {
