@@ -240,11 +240,15 @@ describe("profile analysis", () => {
 
 		expect(mocks.lookupUsersByHandlesEffect).toHaveBeenCalledWith(
 			["alice"],
-			expect.not.objectContaining({ username: "@openclaw" }),
+			expect.objectContaining({
+				useConfiguredCandidate: false,
+			}),
 		);
 		expect(mocks.listUserTweetsEffect).toHaveBeenCalledWith(
 			"42",
-			expect.not.objectContaining({ username: "@openclaw" }),
+			expect.objectContaining({
+				useConfiguredCandidate: false,
+			}),
 		);
 		expect(mocks.searchRecentByConversationIdEffect).toHaveBeenCalledWith(
 			"tweet_1",

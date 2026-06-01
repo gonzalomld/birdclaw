@@ -575,6 +575,49 @@ describe("xurl transport wrapper", () => {
 		]);
 	});
 
+	it("can ignore configured OAuth2 overrides for user lookup reads", async () => {
+		process.env.BIRDCLAW_XURL_OAUTH2_APP = "xurl-steipete";
+		process.env.BIRDCLAW_XURL_OAUTH2_USERNAME = "openclaw";
+		execFileAsyncMock.mockResolvedValueOnce({
+			stdout: JSON.stringify({ data: [] }),
+			stderr: "",
+		});
+		const { lookupUsersByHandles } = await import("./xurl");
+
+		await lookupUsersByHandles(["vincent_koc"], {
+			auth: "oauth2",
+			useConfiguredCandidate: false,
+		});
+
+		expect(execFileAsyncMock).toHaveBeenCalledWith("xurl", [
+			"--auth",
+			"oauth2",
+			`/2/users/by?usernames=vincent_koc&user.fields=${RICH_USER_FIELDS}`,
+		]);
+	});
+
+	it("can ignore configured OAuth2 overrides for user timeline reads", async () => {
+		process.env.BIRDCLAW_XURL_OAUTH2_APP = "xurl-steipete";
+		process.env.BIRDCLAW_XURL_OAUTH2_USERNAME = "openclaw";
+		execFileAsyncMock.mockResolvedValueOnce({
+			stdout: JSON.stringify({ data: [] }),
+			stderr: "",
+		});
+		const { listUserTweets } = await import("./xurl");
+
+		await listUserTweets("42", {
+			auth: "oauth2",
+			maxResults: 5,
+			useConfiguredCandidate: false,
+		});
+
+		expect(execFileAsyncMock).toHaveBeenCalledWith("xurl", [
+			"--auth",
+			"oauth2",
+			`/2/users/42/tweets?max_results=5&expansions=${MEDIA_EXPANSION}&tweet.fields=created_at%2Cconversation_id%2Cpublic_metrics%2Creferenced_tweets&media.fields=${MEDIA_FIELDS}&exclude=retweets`,
+		]);
+	});
+
 	it("passes start_time for mention backfills when present", async () => {
 		execFileAsyncMock.mockResolvedValueOnce({
 			stdout: JSON.stringify({

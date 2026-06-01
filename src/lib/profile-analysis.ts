@@ -792,6 +792,7 @@ export function collectProfileAnalysisContextEffect(
 		const [user] = yield* lookupUsersByHandlesEffect([handle], {
 			auth: "oauth2",
 			signal: options.signal,
+			useConfiguredCandidate: false,
 		});
 		yield* abortIfRequestedEffect(options.signal);
 		if (!user) {
@@ -845,6 +846,7 @@ export function collectProfileAnalysisContextEffect(
 				],
 				signal: options.signal,
 				onAttempt: recordTimelineAttempt,
+				useConfiguredCandidate: false,
 			});
 			yield* abortIfRequestedEffect(options.signal);
 			const limitedResponse =

@@ -40,6 +40,7 @@
 - Let normal Discuss web searches reuse cached AI discussions while keeping the Refresh button as the explicit forced-refresh path.
 - Keep Discuss Live search scoped to live/search-result tweets instead of sweeping every local timeline bucket before AI streaming starts.
 - Tighten AI report line height and first-block spacing in Today and Discuss.
+- Ignore stale configured OAuth2 xurl account overrides for Profile Analyse user lookup and profile timeline reads.
 
 ## 0.6.0 - 2026-05-22
 

@@ -750,7 +750,12 @@ export function lookupUsersByIds(ids: string[]) {
 
 export function lookupUsersByHandlesEffect(
 	handles: string[],
-	options: { auth?: "oauth2"; username?: string; signal?: AbortSignal } = {},
+	options: {
+		auth?: "oauth2";
+		username?: string;
+		signal?: AbortSignal;
+		useConfiguredCandidate?: boolean;
+	} = {},
 ) {
 	if (handles.length === 0) {
 		return Effect.succeed([]);
@@ -768,6 +773,7 @@ export function lookupUsersByHandlesEffect(
 					args,
 					username: options.username,
 					options: { signal: options.signal },
+					useConfiguredCandidate: options.useConfiguredCandidate,
 				})
 			: runJsonCommandEffect(args, { signal: options.signal });
 	return command.pipe(
@@ -777,8 +783,16 @@ export function lookupUsersByHandlesEffect(
 	);
 }
 
-export function lookupUsersByHandles(handles: string[]) {
-	return runEffectPromise(lookupUsersByHandlesEffect(handles));
+export function lookupUsersByHandles(
+	handles: string[],
+	options: {
+		auth?: "oauth2";
+		username?: string;
+		signal?: AbortSignal;
+		useConfiguredCandidate?: boolean;
+	} = {},
+) {
+	return runEffectPromise(lookupUsersByHandlesEffect(handles, options));
 }
 
 function authenticatedUserFromPayload(payload: Record<string, unknown>) {
@@ -1237,6 +1251,7 @@ export function listUserTweetsEffect(
 		username,
 		signal,
 		onAttempt,
+		useConfiguredCandidate,
 	}: {
 		maxResults: number;
 		paginationToken?: string;
@@ -1251,6 +1266,7 @@ export function listUserTweetsEffect(
 		username?: string;
 		signal?: AbortSignal;
 		onAttempt?: JsonCommandOptions["onAttempt"];
+		useConfiguredCandidate?: boolean;
 	},
 ): Effect.Effect<XurlUserTweetsResponse, Error> {
 	const query = new URLSearchParams({
@@ -1290,6 +1306,7 @@ export function listUserTweetsEffect(
 					args: [endpoint],
 					username,
 					options: { signal, onAttempt },
+					useConfiguredCandidate,
 				})
 			: runJsonCommandEffect([endpoint], { signal, onAttempt });
 	return command.pipe(
@@ -1332,6 +1349,7 @@ export function listUserTweets(
 		username?: string;
 		signal?: AbortSignal;
 		onAttempt?: JsonCommandOptions["onAttempt"];
+		useConfiguredCandidate?: boolean;
 	},
 ): Promise<XurlUserTweetsResponse> {
 	return runEffectPromise(listUserTweetsEffect(userId, options));
