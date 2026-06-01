@@ -210,6 +210,33 @@ describe("live tweet search sync", () => {
 		).toEqual({ count: 2 });
 	});
 
+	it("combines bird and xurl results for auto searches", async () => {
+		mocks.searchTweetsViaBird.mockResolvedValue(
+			payload(["tweet_bird_1", "tweet_shared", "tweet_bird_2"]),
+		);
+		mocks.searchRecentTweets.mockResolvedValueOnce(
+			payload(["tweet_xurl_1", "tweet_shared"]),
+		);
+		const { syncTweetSearch } = await import("./tweet-search-live");
+
+		const result = await syncTweetSearch({
+			query: "local-first",
+			mode: "auto",
+			refresh: true,
+			limit: 3,
+			maxPages: 2,
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			source: "bird+xurl",
+			count: 3,
+			tweetIds: ["tweet_bird_1", "tweet_shared", "tweet_bird_2"],
+		});
+		expect(mocks.searchTweetsViaBird).toHaveBeenCalled();
+		expect(mocks.searchRecentTweets).toHaveBeenCalled();
+	});
+
 	it("passes selected time bounds through to xurl search", async () => {
 		mocks.searchRecentTweets.mockResolvedValueOnce(payload(["tweet_time_1"]));
 		const { syncTweetSearch } = await import("./tweet-search-live");
@@ -232,7 +259,37 @@ describe("live tweet search sync", () => {
 		);
 	});
 
-	it("uses xurl directly for auto searches with selected time bounds", async () => {
+	it("uses the default xurl OAuth user for recent search on non-default accounts", async () => {
+		getNativeDb()
+			.prepare(
+				"insert into accounts (id, name, handle, transport, is_default, created_at) values (?, ?, ?, ?, ?, ?)",
+			)
+			.run(
+				"acct_openclaw",
+				"OpenClaw",
+				"@openclaw",
+				"archive",
+				0,
+				"2026-05-31T00:00:00.000Z",
+			);
+		mocks.searchRecentTweets.mockResolvedValueOnce(payload(["tweet_xurl_1"]));
+		const { syncTweetSearch } = await import("./tweet-search-live");
+
+		await syncTweetSearch({
+			query: "openclaw",
+			account: "acct_openclaw",
+			mode: "xurl",
+			refresh: true,
+			limit: 100,
+		});
+
+		expect(mocks.searchRecentTweets).toHaveBeenCalledWith(
+			"openclaw",
+			expect.not.objectContaining({ username: "openclaw" }),
+		);
+	});
+
+	it("uses only xurl for auto searches with selected time bounds", async () => {
 		mocks.searchTweetsViaBird.mockResolvedValue(payload(["tweet_unbounded"]));
 		mocks.searchRecentTweets.mockResolvedValueOnce(payload(["tweet_time_1"]));
 		const { syncTweetSearch } = await import("./tweet-search-live");
@@ -245,7 +302,11 @@ describe("live tweet search sync", () => {
 			since: "2026-05-24T00:00:00Z",
 		});
 
-		expect(result).toMatchObject({ ok: true, source: "xurl" });
+		expect(result).toMatchObject({
+			ok: true,
+			source: "xurl",
+			tweetIds: ["tweet_time_1"],
+		});
 		expect(mocks.searchTweetsViaBird).not.toHaveBeenCalled();
 		expect(mocks.searchRecentTweets).toHaveBeenCalledWith(
 			"local-first",
@@ -255,7 +316,7 @@ describe("live tweet search sync", () => {
 		);
 	});
 
-	it("falls back to bird when bounded auto xurl search fails", async () => {
+	it("reports bounded auto failures without adding unbounded bird results", async () => {
 		mocks.searchRecentTweets.mockRejectedValueOnce(new Error("xurl down"));
 		mocks.searchTweetsViaBird.mockResolvedValueOnce(payload(["tweet_bird_1"]));
 		const { syncTweetSearch } = await import("./tweet-search-live");
@@ -268,9 +329,13 @@ describe("live tweet search sync", () => {
 			since: "2026-05-24T00:00:00Z",
 		});
 
-		expect(result).toMatchObject({ ok: true, source: "bird" });
+		expect(result).toMatchObject({
+			ok: false,
+			source: "auto",
+			error: "xurl down",
+		});
 		expect(mocks.searchRecentTweets).toHaveBeenCalled();
-		expect(mocks.searchTweetsViaBird).toHaveBeenCalled();
+		expect(mocks.searchTweetsViaBird).not.toHaveBeenCalled();
 	});
 
 	it("reports auto failure when both live transports fail", async () => {

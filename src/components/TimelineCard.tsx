@@ -9,6 +9,7 @@ import {
 	UserSearch,
 } from "lucide-react";
 import { formatCompactNumber, formatShortTimestamp } from "#/lib/present";
+import { normalizeTweetUrlEntityRangeForText } from "#/lib/tweet-render";
 import type {
 	TimelineItem,
 	TweetEntities,
@@ -99,10 +100,10 @@ function isUnresolvedShortUrlEntity(entry: TweetUrlEntity) {
 	return !entry.displayUrl && isShortUrl(entry.url);
 }
 
-function unresolvedShortUrlRanges(entities: TweetEntities) {
+function unresolvedShortUrlRanges(text: string, entities: TweetEntities) {
 	return (entities.urls ?? [])
 		.filter(isUnresolvedShortUrlEntity)
-		.map((entry) => ({ start: entry.start, end: entry.end }));
+		.map((entry) => normalizeTweetUrlEntityRangeForText(text, entry));
 }
 
 function textOutsideRanges(
@@ -134,7 +135,7 @@ function shouldHideUnresolvedShortUrls(
 	mediaUrls: Set<string>,
 ) {
 	if (mediaUrls.size === 0) return false;
-	const ranges = unresolvedShortUrlRanges(entities);
+	const ranges = unresolvedShortUrlRanges(text, entities);
 	if (ranges.length === 0) return false;
 	return textOutsideRanges(text, ranges).trim().length === 0;
 }
@@ -202,7 +203,7 @@ function getHiddenMediaUrlRanges(
 				isMediaUrlEntity(entry, mediaUrls, tweetId) ||
 				(hideUnresolvedShortUrls && isUnresolvedShortUrlEntity(entry)),
 		)
-		.map((entry) => ({ start: entry.start, end: entry.end }));
+		.map((entry) => normalizeTweetUrlEntityRangeForText(text, entry));
 }
 
 function getVisibleUrlCards(

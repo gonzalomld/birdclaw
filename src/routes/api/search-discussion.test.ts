@@ -105,7 +105,7 @@ describe("api search discussion route", () => {
 				source: "search",
 				mode: "auto",
 				includeDms: false,
-				limit: 5000,
+				limit: 20000,
 				maxPages: undefined,
 				prefetchAvatars: true,
 			}),

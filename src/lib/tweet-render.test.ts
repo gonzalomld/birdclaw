@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	enrichFallbackUrlEntities,
+	profileDescriptionEntitiesFromXurl,
 	renderTweetMarkdown,
 	renderTweetPlainText,
 	tweetEntitiesFromXurl,
@@ -52,6 +53,26 @@ describe("tweet render helpers", () => {
 
 		expect(renderTweetPlainText("Read: https://t.co/demo", entities)).toBe(
 			"Read: https://example.com/demo",
+		);
+	});
+
+	it("normalizes X API profile description url entities", () => {
+		const entities = profileDescriptionEntitiesFromXurl({
+			description: {
+				urls: [
+					{
+						url: "https://t.co/bio",
+						expanded_url: "https://github.com/nousresearch/hermes-agent",
+						display_url: "github.com/nousresearch/hermes-agent",
+						start: 8,
+						end: 24,
+					},
+				],
+			},
+		});
+
+		expect(renderTweetPlainText("Github: https://t.co/bio", entities)).toBe(
+			"Github: https://github.com/nousresearch/hermes-agent",
 		);
 	});
 

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+	ChevronDown,
 	CheckCircle2,
 	Loader2,
 	RefreshCw,
@@ -59,6 +60,8 @@ const modes: Array<{ value: TweetSearchMode; label: string }> = [
 	{ value: "xurl", label: "xurl" },
 	{ value: "local", label: "Local" },
 ];
+const DISCUSS_SEARCH_LIMIT = 20_000;
+const DISCUSS_MAX_PAGES = 200;
 
 function discussionUrl(
 	query: string,
@@ -75,8 +78,8 @@ function discussionUrl(
 	url.searchParams.set("source", options.source);
 	url.searchParams.set("mode", options.mode);
 	url.searchParams.set("includeDms", String(options.includeDms));
-	url.searchParams.set("limit", "5000");
-	url.searchParams.set("maxPages", "50");
+	url.searchParams.set("limit", String(DISCUSS_SEARCH_LIMIT));
+	url.searchParams.set("maxPages", String(DISCUSS_MAX_PAGES));
 	if (options.question.trim()) {
 		url.searchParams.set("question", options.question.trim());
 	}
@@ -84,6 +87,46 @@ function discussionUrl(
 		url.searchParams.set("refresh", "true");
 	}
 	return url;
+}
+
+function DropdownField<T extends string>({
+	label,
+	value,
+	options,
+	onChange,
+}: {
+	label: string;
+	value: T;
+	options: Array<{ value: T; label: string }>;
+	onChange: (value: T) => void;
+}) {
+	return (
+		<label className="relative min-w-0">
+			<span className="pointer-events-none absolute left-3 top-1.5 z-10 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-soft)]">
+				{label}
+			</span>
+			<select
+				aria-label={label}
+				className={cx(
+					selectFieldClass,
+					"h-[54px] rounded-2xl bg-[var(--bg)] pb-1 pl-3 pr-9 pt-5 font-semibold text-[var(--ink)]",
+				)}
+				value={value}
+				onChange={(event) => onChange(event.currentTarget.value as T)}
+			>
+				{options.map((item) => (
+					<option key={item.value} value={item.value}>
+						{item.label}
+					</option>
+				))}
+			</select>
+			<ChevronDown
+				aria-hidden="true"
+				className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--ink-soft)]"
+				strokeWidth={2}
+			/>
+		</label>
+	);
 }
 
 async function discussionRequestError(response: Response) {
@@ -239,7 +282,7 @@ function DiscussRoute() {
 	const [submittedQuery, setSubmittedQuery] = useState("");
 	const [question, setQuestion] = useState("");
 	const [source, setSource] = useState<SearchDiscussionSource>("search");
-	const [mode, setMode] = useState<TweetSearchMode>("auto");
+	const [mode, setMode] = useState<TweetSearchMode>("xurl");
 	const [includeDms, setIncludeDms] = useState(false);
 	const pendingSubmitRef = useRef(false);
 	const { context, error, loading, markdown, result, run } =
@@ -305,7 +348,7 @@ function DiscussRoute() {
 					</label>
 					<input
 						className={textFieldClass}
-						placeholder="Question"
+						placeholder="Optional question"
 						value={question}
 						onChange={(event) => setQuestion(event.currentTarget.value)}
 					/>
@@ -317,34 +360,20 @@ function DiscussRoute() {
 						<Sparkles className="size-4" aria-hidden="true" />
 						Discuss
 					</button>
-					<div className="flex flex-wrap gap-2 md:col-span-3">
-						<select
-							className={selectFieldClass}
+					<div className="grid gap-2 md:col-span-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+						<DropdownField
+							label="Source"
+							options={sources}
 							value={source}
-							onChange={(event) =>
-								setSource(event.currentTarget.value as SearchDiscussionSource)
-							}
-						>
-							{sources.map((item) => (
-								<option key={item.value} value={item.value}>
-									{item.label}
-								</option>
-							))}
-						</select>
-						<select
-							className={selectFieldClass}
+							onChange={setSource}
+						/>
+						<DropdownField
+							label="Mode"
+							options={modes}
 							value={mode}
-							onChange={(event) =>
-								setMode(event.currentTarget.value as TweetSearchMode)
-							}
-						>
-							{modes.map((item) => (
-								<option key={item.value} value={item.value}>
-									{item.label}
-								</option>
-							))}
-						</select>
-						<label className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] px-3 py-1 text-[13px] font-medium text-[var(--ink-soft)]">
+							onChange={setMode}
+						/>
+						<label className="inline-flex h-[54px] items-center gap-2 rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-3 text-[13px] font-medium text-[var(--ink-soft)]">
 							<input
 								type="checkbox"
 								checked={includeDms}

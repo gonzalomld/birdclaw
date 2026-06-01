@@ -791,7 +791,6 @@ export function collectProfileAnalysisContextEffect(
 		yield* abortIfRequestedEffect(options.signal);
 		const [user] = yield* lookupUsersByHandlesEffect([handle], {
 			auth: "oauth2",
-			username: account.handle,
 			signal: options.signal,
 		});
 		yield* abortIfRequestedEffect(options.signal);
@@ -844,7 +843,6 @@ export function collectProfileAnalysisContextEffect(
 					"verified",
 					"verified_type",
 				],
-				username: account.handle,
 				signal: options.signal,
 				onAttempt: recordTimelineAttempt,
 			});
@@ -910,7 +908,6 @@ export function collectProfileAnalysisContextEffect(
 						paginationToken: conversationNextToken,
 						timeoutMs: 30_000,
 						auth: "oauth2",
-						username: account.handle,
 						signal: options.signal,
 						onAttempt: recordConversationAttempt,
 					}).pipe(

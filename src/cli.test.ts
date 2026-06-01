@@ -2727,11 +2727,11 @@ describe("cli", () => {
 				question: "what changed?",
 				originalsOnly: true,
 				hideLowQuality: true,
-				mode: "auto",
+				mode: "xurl",
 				model: "gpt-5.5",
 				refresh: true,
 				limit: 25,
-				maxPages: 50,
+				maxPages: 200,
 			},
 			expect.objectContaining({ onDelta: expect.any(Function) }),
 		);
@@ -2740,10 +2740,10 @@ describe("cli", () => {
 			expect.objectContaining({
 				query: "sync",
 				source: "search",
-				mode: "auto",
+				mode: "xurl",
 				includeDms: false,
-				limit: 5000,
-				maxPages: 50,
+				limit: 20000,
+				maxPages: 200,
 			}),
 			expect.objectContaining({ onDelta: undefined }),
 		);

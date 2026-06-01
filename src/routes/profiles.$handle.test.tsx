@@ -28,11 +28,31 @@ function profileContext() {
 			id: "profile_steipete",
 			handle: "steipete",
 			displayName: "Peter Steinberger",
-			bio: "Futurist 🦄\nChief Architect @openclaw 🦞\nWriter @forbes Tech Council\nAdjunct @MIT\nEx @Microsoft @Qantas\nContact hello@openai.com",
+			bio: "Futurist 🦄\nChief Architect @openclaw 🦞\nWriter @forbes Tech Council\nAdjunct @MIT\nEx @Microsoft @Qantas\nContact hello@openai.com\nGithub: https://t.co/LZwHTUFwPq\nHuggingFace: https://t.co/sN2FFU8PVE",
 			followersCount: 123456,
 			followingCount: 987,
 			avatarHue: 18,
 			avatarUrl: "https://pbs.twimg.com/profile_images/1/avatar.jpg",
+			entities: {
+				description: {
+					urls: [
+						{
+							start: 137,
+							end: 160,
+							url: "https://t.co/LZwHTUFwPq",
+							expanded_url: "https://github.com/nousresearch/hermes-agent",
+							display_url: "github.com/nousresearch/hermes-agent",
+						},
+						{
+							start: 174,
+							end: 197,
+							url: "https://t.co/sN2FFU8PVE",
+							expanded_url: "https://huggingface.co/NousResearch",
+							display_url: "huggingface.co/NousResearch",
+						},
+					],
+				},
+			},
 			createdAt: "2009-03-19T22:54:05.000Z",
 		},
 		externalUserId: "123",
@@ -147,25 +167,37 @@ describe("profile route", () => {
 		expect(screen.getByText(/Futurist/)).toBeInTheDocument();
 		expect(screen.getByText(/Contact hello@openai\.com/)).toBeInTheDocument();
 		expect(screen.queryByRole("link", { name: "@openai" })).toBeNull();
+		expect(screen.queryByText(/t\.co\/LZwHTUFwPq/)).toBeNull();
+		expect(screen.queryByText(/t\.co\/sN2FFU8PVE/)).toBeNull();
+		expect(
+			screen.getByRole("link", {
+				name: "https://github.com/nousresearch/hermes-agent",
+			}),
+		).toHaveAttribute("href", "https://github.com/nousresearch/hermes-agent");
+		expect(
+			screen.getByRole("link", {
+				name: "https://huggingface.co/NousResearch",
+			}),
+		).toHaveAttribute("href", "https://huggingface.co/NousResearch");
 		expect(screen.getByRole("link", { name: "@openclaw" })).toHaveAttribute(
 			"href",
-			"https://x.com/openclaw",
+			"/profiles/openclaw",
 		);
 		expect(screen.getByRole("link", { name: "@forbes" })).toHaveAttribute(
 			"href",
-			"https://x.com/forbes",
+			"/profiles/forbes",
 		);
 		expect(screen.getByRole("link", { name: "@MIT" })).toHaveAttribute(
 			"href",
-			"https://x.com/MIT",
+			"/profiles/MIT",
 		);
 		expect(screen.getByRole("link", { name: "@Microsoft" })).toHaveAttribute(
 			"href",
-			"https://x.com/Microsoft",
+			"/profiles/Microsoft",
 		);
 		expect(screen.getByRole("link", { name: "@Qantas" })).toHaveAttribute(
 			"href",
-			"https://x.com/Qantas",
+			"/profiles/Qantas",
 		);
 		expect(await screen.findByText("Agent tooling.")).toBeInTheDocument();
 		expect(screen.getByText("Business news.")).toBeInTheDocument();

@@ -123,17 +123,18 @@ describe("discuss route", () => {
 			screen.getByRole("heading", { name: "Discuss", level: 1 }),
 		).toBeInTheDocument();
 		expect(screen.getByText("Search to begin.")).toBeInTheDocument();
+		expect(screen.getByLabelText("Mode")).toHaveValue("xurl");
 
 		fireEvent.change(screen.getByPlaceholderText("Keywords"), {
 			target: { value: "ChatGPT" },
 		});
-		fireEvent.change(screen.getByPlaceholderText("Question"), {
+		fireEvent.change(screen.getByPlaceholderText("Optional question"), {
 			target: { value: "Useful takeaways" },
 		});
-		fireEvent.change(screen.getAllByRole("combobox")[1]!, {
+		fireEvent.change(screen.getByLabelText("Mode"), {
 			target: { value: "bird" },
 		});
-		fireEvent.change(screen.getAllByRole("combobox")[0]!, {
+		fireEvent.change(screen.getByLabelText("Source"), {
 			target: { value: "all" },
 		});
 		fireEvent.click(screen.getByLabelText("DMs"));
@@ -152,6 +153,8 @@ describe("discuss route", () => {
 		expect(urls[0]?.searchParams.get("mode")).toBe("bird");
 		expect(urls[0]?.searchParams.get("includeDms")).toBe("true");
 		expect(urls[0]?.searchParams.get("question")).toBe("Useful takeaways");
+		expect(urls[0]?.searchParams.get("limit")).toBe("20000");
+		expect(urls[0]?.searchParams.get("maxPages")).toBe("200");
 		expect(urls[0]?.searchParams.has("refresh")).toBe(false);
 
 		fireEvent.click(screen.getByRole("button", { name: "Refresh" }));

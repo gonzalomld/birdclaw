@@ -1,6 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TweetRichText } from "./TweetRichText";
+
+function codePointRange(text: string, needle: string) {
+	const start = Array.from(text.slice(0, text.indexOf(needle))).length;
+	return { start, end: start + Array.from(needle).length };
+}
 
 describe("TweetRichText", () => {
 	it("renders mentions, urls, and hashtags with rich spans", () => {
@@ -60,6 +65,121 @@ describe("TweetRichText", () => {
 			"href",
 			"https://t.co/raw",
 		);
+	});
+
+	it("can show expanded url labels", () => {
+		const { container } = render(
+			<TweetRichText
+				entities={{
+					urls: [
+						{
+							url: "https://t.co/demo",
+							expandedUrl: "https://example.com/demo",
+							displayUrl: "example.com/demo",
+							start: 6,
+							end: 23,
+						},
+					],
+				}}
+				text="Read: https://t.co/demo"
+				urlLabel="expanded"
+			/>,
+		);
+
+		expect(
+			screen.getByRole("link", { name: "https://example.com/demo" }),
+		).toHaveAttribute("href", "https://example.com/demo");
+		expect(container).not.toHaveTextContent("Read: example.com/demo");
+	});
+
+	it("links mention entities even without hydrated profile previews", () => {
+		render(
+			<TweetRichText
+				entities={{
+					mentions: [{ username: "openclaw", start: 5, end: 14 }],
+				}}
+				text="Meet @openclaw"
+			/>,
+		);
+
+		expect(screen.getByRole("link", { name: "@openclaw" })).toHaveAttribute(
+			"href",
+			"/profiles/openclaw",
+		);
+	});
+
+	it("renders X API code point ranges after emoji in profile bios", () => {
+		const text =
+			"Futurist 🦄\nChief Architect @openclaw 🦞\nWriter @forbes Tech Council\nAdjunct @MIT\nEx @Microsoft @Qantas";
+		const mention = (username: string) => ({
+			username,
+			...codePointRange(text, `@${username}`),
+		});
+		const { container } = render(
+			<TweetRichText
+				entities={{
+					mentions: [
+						mention("openclaw"),
+						mention("forbes"),
+						mention("MIT"),
+						mention("Microsoft"),
+						mention("Qantas"),
+					],
+				}}
+				text={text}
+			/>,
+		);
+
+		const rendered = within(container);
+		expect(rendered.getByText(/Chief Architect/)).toHaveTextContent(
+			"Chief Architect",
+		);
+		expect(rendered.getByText(/Writer/)).toHaveTextContent("Writer");
+		expect(rendered.getByRole("link", { name: "@openclaw" })).toHaveAttribute(
+			"href",
+			"/profiles/openclaw",
+		);
+		expect(rendered.getByRole("link", { name: "@forbes" })).toHaveAttribute(
+			"href",
+			"/profiles/forbes",
+		);
+		expect(rendered.getByRole("link", { name: "@MIT" })).toHaveAttribute(
+			"href",
+			"/profiles/MIT",
+		);
+		expect(rendered.getByRole("link", { name: "@Microsoft" })).toHaveAttribute(
+			"href",
+			"/profiles/Microsoft",
+		);
+		expect(rendered.getByRole("link", { name: "@Qantas" })).toHaveAttribute(
+			"href",
+			"/profiles/Qantas",
+		);
+	});
+
+	it("hides X API code point URL ranges after emoji", () => {
+		const text = "🦞 https://t.co/photo";
+		const range = codePointRange(text, "https://t.co/photo");
+		const { container } = render(
+			<TweetRichText
+				entities={{
+					urls: [
+						{
+							url: "https://t.co/photo",
+							expandedUrl: "https://x.com/openclaw/status/1/photo/1",
+							displayUrl: "pic.x.com/photo",
+							...range,
+						},
+					],
+				}}
+				hiddenUrlRanges={[range]}
+				text={text}
+			/>,
+		);
+
+		expect(container).toHaveTextContent("🦞");
+		expect(screen.queryByRole("link", { name: "pic.x.com/photo" })).toBeNull();
+		expect(screen.queryByText(/t\.co\/photo/)).toBeNull();
 	});
 
 	it("keeps unsafe url entity text visible as plain text", () => {

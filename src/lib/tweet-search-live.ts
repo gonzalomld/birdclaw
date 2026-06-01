@@ -28,7 +28,7 @@ export interface SyncTweetSearchOptions {
 export type SyncTweetSearchResult =
 	| {
 			ok: true;
-			source: "bird" | "xurl" | "cache";
+			source: "bird" | "xurl" | "bird+xurl" | "cache";
 			accountId: string;
 			query: string;
 			count: number;
@@ -43,8 +43,8 @@ export type SyncTweetSearchResult =
 			error: string;
 	  };
 
-const DEFAULT_SEARCH_LIMIT = 5_000;
-const DEFAULT_MAX_PAGES = 50;
+const DEFAULT_SEARCH_LIMIT = 20_000;
+const DEFAULT_MAX_PAGES = 200;
 const DEFAULT_CACHE_TTL_MS = 2 * 60_000;
 const XURL_PAGE_SIZE = 100;
 
@@ -315,7 +315,6 @@ function fetchXurlSearchEffect({
 	timeoutMs,
 	since,
 	until,
-	username,
 }: {
 	query: string;
 	limit: number;
@@ -323,7 +322,6 @@ function fetchXurlSearchEffect({
 	timeoutMs?: number;
 	since?: string;
 	until?: string;
-	username?: string;
 }): Effect.Effect<XurlMentionsResponse, Error> {
 	return Effect.gen(function* () {
 		const responses: XurlMentionsResponse[] = [];
@@ -338,7 +336,6 @@ function fetchXurlSearchEffect({
 				paginationToken: nextToken,
 				startTime: since,
 				endTime: until,
-				username,
 				timeoutMs,
 			});
 			responses.push(toMentionsResponse(response));
@@ -415,6 +412,47 @@ function runModeEffect(
 	});
 }
 
+function combineTweetSearchResults(
+	left: SyncTweetSearchResult,
+	right: SyncTweetSearchResult,
+	limit: number,
+): SyncTweetSearchResult {
+	if (left.ok && right.ok) {
+		const tweetIds = [...new Set([...left.tweetIds, ...right.tweetIds])].slice(
+			0,
+			limit,
+		);
+		const liveSources = new Set(
+			[left.source, right.source].filter((source) => source !== "cache"),
+		);
+		return {
+			ok: true,
+			source:
+				liveSources.has("bird") && liveSources.has("xurl")
+					? "bird+xurl"
+					: liveSources.has("bird")
+						? "bird"
+						: liveSources.has("xurl")
+							? "xurl"
+							: "cache",
+			accountId: left.accountId,
+			query: left.query,
+			count: tweetIds.length,
+			pageCount: left.pageCount + right.pageCount,
+			tweetIds,
+		};
+	}
+	if (left.ok) return left;
+	if (right.ok) return right;
+	return {
+		ok: false,
+		source: "auto",
+		accountId: left.accountId,
+		query: left.query,
+		error: `${left.error}; ${right.error}`,
+	};
+}
+
 export function syncTweetSearchEffect({
 	query,
 	account,
@@ -483,42 +521,42 @@ export function syncTweetSearchEffect({
 		}
 
 		if (normalizedSince || normalizedUntil) {
-			const xurlResult = yield* runModeEffect("xurl", runOptions).pipe(
-				Effect.either,
-			);
-			if (xurlResult._tag === "Right") {
-				return xurlResult.right;
-			}
-			return yield* runModeEffect("bird", runOptions).pipe(
+			return yield* runModeEffect("xurl", runOptions).pipe(
 				Effect.catchAll((error) =>
 					Effect.succeed({
 						ok: false,
 						source: "auto",
 						accountId,
 						query: normalizedQuery,
-						error: `${xurlResult.left.message}; ${error.message}`,
+						error: error.message,
 					} as const),
 				),
 			);
 		}
 
 		const birdResult = yield* runModeEffect("bird", runOptions).pipe(
-			Effect.either,
-		);
-		if (birdResult._tag === "Right") {
-			return birdResult.right;
-		}
-		return yield* runModeEffect("xurl", runOptions).pipe(
 			Effect.catchAll((error) =>
 				Effect.succeed({
 					ok: false,
-					source: "auto",
+					source: "bird",
 					accountId,
 					query: normalizedQuery,
-					error: `${birdResult.left.message}; ${error.message}`,
+					error: error.message,
 				} as const),
 			),
 		);
+		const xurlResult = yield* runModeEffect("xurl", runOptions).pipe(
+			Effect.catchAll((error) =>
+				Effect.succeed({
+					ok: false,
+					source: "xurl",
+					accountId,
+					query: normalizedQuery,
+					error: error.message,
+				} as const),
+			),
+		);
+		return combineTweetSearchResults(birdResult, xurlResult, normalizedLimit);
 	});
 }
 

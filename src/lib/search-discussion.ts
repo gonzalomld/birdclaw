@@ -7,6 +7,7 @@ import {
 	runEffectPromise,
 	tryPromise,
 } from "./effect-runtime";
+import { getNativeDb } from "./db";
 import { listDmConversations, listTimelineItems } from "./queries";
 import { readSyncCache, writeSyncCache } from "./sync-cache";
 import {
@@ -141,8 +142,8 @@ interface OpenAIStreamState {
 const DEFAULT_MODEL = "gpt-5.5";
 const DEFAULT_REASONING_EFFORT = "medium";
 const DEFAULT_SERVICE_TIER = "priority";
-const DEFAULT_LIMIT = 5_000;
-const DEFAULT_MAX_PAGES = 50;
+const DEFAULT_LIMIT = 20_000;
+const DEFAULT_MAX_PAGES = 200;
 const MAX_PROMPT_DATA_CHARS = 1_200_000;
 const DELIMITER_PATTERN = /\n---\s*\n/;
 const VISIBLE_DELIMITER_HOLD = 8;
@@ -218,6 +219,130 @@ function collectTweetsForSource(
 		bookmarkedOnly: source === "bookmarks",
 		limit: options.limit,
 	}).map((item) => compactTweet(source, item));
+}
+
+function collectLiveSearchTweets(
+	options: SearchDiscussionOptions & {
+		limit: number;
+		liveSearch?: SyncTweetSearchResult;
+	},
+) {
+	if (options.source !== "search" || options.liveSearch?.ok !== true) {
+		return null;
+	}
+	if (options.liveSearch.tweetIds.length === 0) return [];
+	const ids = [...new Set(options.liveSearch.tweetIds)].slice(0, options.limit);
+	const positionById = new Map(ids.map((id, index) => [id, index]));
+	const placeholders = ids.map(() => "?").join(",");
+	const accountId = options.liveSearch.accountId;
+	const rows = getNativeDb({ seedDemoData: false })
+		.prepare(`
+      select
+        t.id,
+        t.text,
+        t.created_at,
+        t.is_replied,
+        t.like_count,
+        t.media_count,
+        case
+          when exists (
+            select 1 from tweet_collections collection
+            where collection.account_id = ?
+              and collection.tweet_id = t.id
+              and collection.kind = 'bookmarks'
+          ) then 1
+          when t.account_id = ? and t.bookmarked = 1 then 1
+          else 0
+        end as bookmarked,
+        case
+          when exists (
+            select 1 from tweet_collections collection
+            where collection.account_id = ?
+              and collection.tweet_id = t.id
+              and collection.kind = 'likes'
+          ) then 1
+          when t.account_id = ? and t.liked = 1 then 1
+          else 0
+        end as liked,
+        p.id as profile_id,
+        p.handle,
+        p.display_name,
+        p.bio,
+        p.followers_count,
+        p.following_count,
+        p.avatar_hue,
+        p.avatar_url,
+        p.created_at as profile_created_at
+      from tweets t
+      join profiles p on p.id = t.author_profile_id
+      where t.id in (${placeholders})
+    `)
+		.all(accountId, accountId, accountId, accountId, ...ids) as Array<
+		Record<string, unknown>
+	>;
+
+	return rows
+		.sort(
+			(left, right) =>
+				(positionById.get(String(left.id)) ?? Number.MAX_SAFE_INTEGER) -
+				(positionById.get(String(right.id)) ?? Number.MAX_SAFE_INTEGER),
+		)
+		.filter((row) => liveSearchRowPassesFilters(row, options))
+		.map(
+			(row): CompactSearchTweet => ({
+				id: String(row.id),
+				url: tweetUrl(String(row.handle), String(row.id)),
+				source: "search",
+				author: String(row.handle),
+				name: String(row.display_name),
+				authorProfile: {
+					id: String(row.profile_id),
+					handle: String(row.handle),
+					displayName: String(row.display_name),
+					bio: String(row.bio),
+					followersCount: Number(row.followers_count),
+					followingCount: Number(row.following_count ?? 0),
+					avatarHue: Number(row.avatar_hue),
+					avatarUrl:
+						typeof row.avatar_url === "string"
+							? String(row.avatar_url)
+							: undefined,
+					createdAt: String(row.profile_created_at),
+				},
+				createdAt: String(row.created_at),
+				text: String(row.text),
+				likeCount: Number(row.like_count),
+				liked: Boolean(row.liked),
+				bookmarked: Boolean(row.bookmarked),
+				needsReply: !row.is_replied,
+			}),
+		);
+}
+
+function liveSearchRowPassesFilters(
+	row: Record<string, unknown>,
+	options: SearchDiscussionOptions,
+) {
+	const text = String(row.text);
+	const createdAt = String(row.created_at);
+	if (options.originalsOnly && text.startsWith("@")) return false;
+	if (options.since?.trim() && createdAt < options.since.trim()) return false;
+	if (options.until?.trim() && createdAt >= options.until.trim()) return false;
+	if (!options.hideLowQuality) return true;
+
+	const trimmed = text.trim();
+	const strippedShortUrlText = text.replaceAll("https://t.co/", "").trim();
+	const likeCount = Number(row.like_count);
+	const mediaCount = Number(row.media_count);
+	return !(
+		text.startsWith("RT @") ||
+		(likeCount < 50 &&
+			((strippedShortUrlText.length < 16 && mediaCount === 0) ||
+				(text.startsWith("@") && trimmed.length < 60) ||
+				(text.includes("https://t.co/") &&
+					mediaCount === 0 &&
+					strippedShortUrlText.length < 45)))
+	);
 }
 
 function collectDms(options: SearchDiscussionOptions & { limit: number }) {
@@ -330,16 +455,27 @@ export function collectSearchDiscussionContext(
 		bookmarks: 0,
 		dms: 0,
 	};
-	const tweets = sourceList(source).flatMap((item) => {
-		const sourceTweets = collectTweetsForSource(item, {
-			...options,
-			query,
-			source,
-			limit,
-		});
-		counts[item] = sourceTweets.length;
-		return sourceTweets;
+	const liveSearchTweets = collectLiveSearchTweets({
+		...options,
+		query,
+		source,
+		limit,
 	});
+	const tweets =
+		liveSearchTweets ??
+		sourceList(source).flatMap((item) => {
+			const sourceTweets = collectTweetsForSource(item, {
+				...options,
+				query,
+				source,
+				limit,
+			});
+			counts[item] = sourceTweets.length;
+			return sourceTweets;
+		});
+	if (liveSearchTweets) {
+		counts.search = liveSearchTweets.length;
+	}
 	const dms = collectDms({ ...options, query, source, limit });
 	counts.dms = dms.length;
 	const limitedTweets = dedupeTweets(tweets).slice(0, limit);

@@ -487,11 +487,11 @@ describe("MarkdownViewer", () => {
 
 		expect(screen.getByRole("link", { name: "@OpenAI" })).toHaveAttribute(
 			"href",
-			"https://x.com/OpenAI",
+			"/profiles/OpenAI",
 		);
 		expect(screen.getByRole("link", { name: "@openclaw" })).toHaveAttribute(
 			"href",
-			"https://x.com/openclaw",
+			"/profiles/openclaw",
 		);
 		expect(screen.getByText("AI research and products.")).toBeInTheDocument();
 		expect(screen.getByText("Agent tooling")).toBeInTheDocument();
@@ -654,6 +654,95 @@ describe("MarkdownViewer", () => {
 						"ChainZenit reacted positively to “autonomous agents running on goAT” (tweet_2056286865875935400)."
 					}
 				/>,
+			);
+
+			const link = screen.getByRole("link", {
+				name: "“autonomous agents running on goAT”",
+			});
+			const wrapper = link.parentElement;
+			const preview = screen
+				.getByText(/https:\/\/goat\.network\/agents/)
+				.closest("[aria-hidden]");
+			expect(wrapper).not.toBeNull();
+
+			fireEvent.pointerEnter(wrapper as Element);
+
+			await waitFor(() => {
+				expect(preview).toHaveClass("bottom-[calc(100%+10px)]");
+			});
+		} finally {
+			Object.defineProperty(window, "innerHeight", {
+				configurable: true,
+				value: originalInnerHeight,
+			});
+			HTMLElement.prototype.getBoundingClientRect = originalRect;
+			if (originalOffsetHeight) {
+				Object.defineProperty(
+					HTMLElement.prototype,
+					"offsetHeight",
+					originalOffsetHeight,
+				);
+			}
+		}
+	});
+
+	it("places tweet previews above when a clipping container is tight below", async () => {
+		const originalInnerHeight = window.innerHeight;
+		const originalRect = HTMLElement.prototype.getBoundingClientRect;
+		const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			"offsetHeight",
+		);
+		Object.defineProperty(window, "innerHeight", {
+			configurable: true,
+			value: 800,
+		});
+		HTMLElement.prototype.getBoundingClientRect = function () {
+			if (this instanceof HTMLElement && this.dataset.testid === "clip-box") {
+				return {
+					bottom: 260,
+					height: 220,
+					left: 0,
+					right: 680,
+					top: 40,
+					width: 680,
+					x: 0,
+					y: 40,
+					toJSON: () => ({}),
+				} as DOMRect;
+			}
+			return {
+				bottom: 230,
+				height: 18,
+				left: 120,
+				right: 220,
+				top: 212,
+				width: 100,
+				x: 120,
+				y: 212,
+				toJSON: () => ({}),
+			} as DOMRect;
+		};
+		Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+			configurable: true,
+			get() {
+				return 260;
+			},
+		});
+
+		try {
+			render(
+				<div
+					data-testid="clip-box"
+					style={{ height: 220, overflowY: "hidden" }}
+				>
+					<MarkdownViewer
+						context={context}
+						markdown={
+							"ChainZenit reacted positively to “autonomous agents running on goAT” (tweet_2056286865875935400)."
+						}
+					/>
+				</div>,
 			);
 
 			const link = screen.getByRole("link", {

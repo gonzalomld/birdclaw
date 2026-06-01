@@ -71,6 +71,116 @@ describe("search discussion", () => {
 		expect(context.hash).toHaveLength(40);
 	});
 
+	it("keeps live search scoped to the search bucket", () => {
+		const context = collectSearchDiscussionContext({
+			query: "local-first",
+			source: "search",
+			limit: 20,
+		});
+
+		expect(context.counts.home).toBe(0);
+		expect(context.tweets.map((tweet) => tweet.id)).not.toContain("tweet_001");
+	});
+
+	it("uses live search tweet ids without sweeping local search FTS", () => {
+		getNativeDb();
+		const context = collectSearchDiscussionContext({
+			query: "local-first",
+			source: "search",
+			limit: 20,
+			liveSearch: {
+				ok: true,
+				source: "xurl",
+				accountId: "acct_primary",
+				query: "local-first",
+				count: 1,
+				pageCount: 1,
+				tweetIds: ["tweet_001"],
+			},
+		});
+
+		expect(context.counts.search).toBe(1);
+		expect(context.tweets.map((tweet) => tweet.id)).toEqual(["tweet_001"]);
+		expect(context.tweets[0]?.source).toBe("search");
+	});
+
+	it("does not fall back to stale local tweets for empty live searches", () => {
+		const context = collectSearchDiscussionContext({
+			query: "local-first",
+			source: "search",
+			limit: 20,
+			liveSearch: {
+				ok: true,
+				source: "xurl",
+				accountId: "acct_primary",
+				query: "local-first",
+				count: 0,
+				pageCount: 1,
+				tweetIds: [],
+			},
+		});
+
+		expect(context.counts.search).toBe(0);
+		expect(context.tweets).toEqual([]);
+	});
+
+	it("applies discussion filters to live search tweet ids", () => {
+		getNativeDb();
+		const context = collectSearchDiscussionContext({
+			query: "scope",
+			source: "search",
+			limit: 20,
+			originalsOnly: true,
+			liveSearch: {
+				ok: true,
+				source: "xurl",
+				accountId: "acct_primary",
+				query: "scope",
+				count: 1,
+				pageCount: 1,
+				tweetIds: ["tweet_002"],
+			},
+		});
+
+		expect(context.counts.search).toBe(0);
+		expect(context.tweets).toEqual([]);
+	});
+
+	it("keeps live search collection state scoped to the live account", () => {
+		const db = getNativeDb();
+		db.prepare(
+			`
+      insert or replace into tweet_collections (
+        account_id, tweet_id, kind, collected_at, source, raw_json, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?)
+      `,
+		).run(
+			"acct_primary",
+			"tweet_002",
+			"bookmarks",
+			"2026-01-01T00:00:00.000Z",
+			"test",
+			"{}",
+			"2026-01-01T00:00:00.000Z",
+		);
+		const context = collectSearchDiscussionContext({
+			query: "scope",
+			source: "search",
+			limit: 20,
+			liveSearch: {
+				ok: true,
+				source: "xurl",
+				accountId: "acct_primary",
+				query: "scope",
+				count: 1,
+				pageCount: 1,
+				tweetIds: ["tweet_002"],
+			},
+		});
+
+		expect(context.tweets[0]?.bookmarked).toBe(true);
+	});
+
 	it("changes the context hash when profile prompt context changes", () => {
 		const first = collectSearchDiscussionContext({
 			query: "local-first",

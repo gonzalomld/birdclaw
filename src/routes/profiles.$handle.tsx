@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
-import { Fragment, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { AvatarChip } from "#/components/AvatarChip";
-import { ProfilePreview } from "#/components/ProfilePreview";
+import { TweetRichText } from "#/components/TweetRichText";
 import {
 	cleanProfileHandle,
 	formatProfileAnalysisCounts,
@@ -12,8 +12,8 @@ import {
 } from "#/components/ProfileAnalysisStream";
 import { formatCompactNumber } from "#/lib/present";
 import type { ProfileAnalysisContext } from "#/lib/profile-analysis";
-import type { ProfileRecord } from "#/lib/types";
-import { tweetMentionClass } from "#/lib/ui";
+import { profileDescriptionEntitiesFromXurl } from "#/lib/tweet-render";
+import type { ProfileRecord, TweetEntities } from "#/lib/types";
 
 export const Route = createFileRoute("/profiles/$handle")({
 	component: ProfilesHandleRoute,
@@ -58,51 +58,50 @@ function profilesByHandleFromContext(context: ProfileAnalysisContext | null) {
 	return profilesByHandle;
 }
 
+function profileBioEntities(
+	profile: ProfileRecord,
+	profilesByHandle: Map<string, ProfileRecord>,
+) {
+	const entities = profileDescriptionEntitiesFromXurl(profile.entities);
+	const mentions = entities.mentions ?? [];
+	const existingMentionRanges = new Set(
+		mentions.map((mention) => `${mention.start}:${mention.end}`),
+	);
+	for (const match of profile.bio.matchAll(profileMentionRe)) {
+		const start = (match.index ?? 0) + match[1].length;
+		const username = match[2];
+		const end = start + username.length + 1;
+		const key = `${start}:${end}`;
+		if (existingMentionRanges.has(key)) continue;
+		const linkedProfile = profilesByHandle.get(username.toLowerCase());
+		mentions.push({
+			username,
+			start,
+			end,
+			...(linkedProfile ? { profile: linkedProfile } : {}),
+		});
+	}
+	const next: TweetEntities = {
+		...entities,
+		...(mentions.length ? { mentions } : {}),
+	};
+	return next;
+}
+
 function ProfileBioText({
-	text,
+	profile,
 	profilesByHandle,
 }: {
-	text: string;
+	profile: ProfileRecord;
 	profilesByHandle: Map<string, ProfileRecord>;
 }) {
-	const nodes = [];
-	let cursor = 0;
-	for (const match of text.matchAll(profileMentionRe)) {
-		const index = (match.index ?? 0) + match[1].length;
-		const token = `@${match[2]}`;
-		const profile = profilesByHandle.get(match[2].toLowerCase());
-		if (index > cursor) nodes.push(text.slice(cursor, index));
-		nodes.push(
-			profile ? (
-				<ProfilePreview key={`${token}-${String(index)}`} profile={profile}>
-					<span className={tweetMentionClass}>{token}</span>
-				</ProfilePreview>
-			) : (
-				<a
-					key={`${token}-${String(index)}`}
-					className={tweetMentionClass}
-					href={`https://x.com/${token.slice(1)}`}
-					rel="noreferrer"
-					target="_blank"
-				>
-					{token}
-				</a>
-			),
-		);
-		cursor = index + token.length;
-	}
-	if (cursor < text.length) nodes.push(text.slice(cursor));
-
 	return (
-		<p className="m-0 max-w-2xl whitespace-pre-wrap text-[15px] leading-[1.45] text-[var(--ink)] [overflow-wrap:anywhere]">
-			{nodes.map((node, index) => (
-				<Fragment
-					key={typeof node === "string" ? `${node}-${String(index)}` : index}
-				>
-					{node}
-				</Fragment>
-			))}
-		</p>
+		<TweetRichText
+			className="m-0 max-w-2xl whitespace-pre-wrap text-[15px] leading-[1.45] text-[var(--ink)] [overflow-wrap:anywhere]"
+			entities={profileBioEntities(profile, profilesByHandle)}
+			text={profile.bio}
+			urlLabel="expanded"
+		/>
 	);
 }
 
@@ -187,8 +186,11 @@ export function ProfileRouteView({ handle }: { handle: string }) {
 							</div>
 						</div>
 
-						{bio ? (
-							<ProfileBioText profilesByHandle={profilesByHandle} text={bio} />
+						{profile && bio ? (
+							<ProfileBioText
+								profile={profile}
+								profilesByHandle={profilesByHandle}
+							/>
 						) : null}
 
 						<div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--ink-soft)]">

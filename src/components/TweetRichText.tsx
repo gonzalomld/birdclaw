@@ -1,8 +1,9 @@
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 import {
-	collectTweetSegments,
+	collectTweetSegmentsForText,
 	enrichFallbackUrlEntities,
+	normalizeTweetUrlEntityRangeForText,
 } from "#/lib/tweet-render";
 import type { TweetEntities } from "#/lib/types";
 import {
@@ -14,23 +15,40 @@ import {
 import { safeHttpUrl } from "#/lib/url-safety";
 import { ProfilePreview } from "./ProfilePreview";
 
+function rangeKey(range: { start: number; end: number }) {
+	return `${range.start}:${range.end}`;
+}
+
 export function TweetRichText({
 	text,
 	entities,
 	className = "body-copy",
 	hiddenUrlRanges = [],
+	urlLabel = "display",
+	as = "p",
 }: {
 	text: string;
 	entities: TweetEntities;
 	className?: string;
 	hiddenUrlRanges?: Array<{ start: number; end: number }>;
+	urlLabel?: "display" | "expanded";
+	as?: "p" | "span";
 }) {
 	const richEntities = enrichFallbackUrlEntities(text, entities);
-	const segments = collectTweetSegments(richEntities);
+	const segments = collectTweetSegmentsForText(text, richEntities);
+	const hiddenRawRangeKeys = new Set(hiddenUrlRanges.map(rangeKey));
+	const hiddenRangeKeys = new Set(hiddenRawRangeKeys);
+	for (const entry of richEntities.urls ?? []) {
+		if (!hiddenRawRangeKeys.has(rangeKey(entry))) continue;
+		hiddenRangeKeys.add(
+			rangeKey(normalizeTweetUrlEntityRangeForText(text, entry)),
+		);
+	}
+	const Wrapper = as;
 	let cursor = 0;
 
 	return (
-		<p className={className === "body-copy" ? bodyCopyClass : className}>
+		<Wrapper className={className === "body-copy" ? bodyCopyClass : className}>
 			{segments.map((segment, index) => {
 				if (
 					segment.start < cursor ||
@@ -48,13 +66,7 @@ export function TweetRichText({
 						{text.slice(segment.start, segment.end)}
 					</Fragment>
 				);
-				if (
-					segment.kind === "url" &&
-					hiddenUrlRanges.some(
-						(range) =>
-							range.start === segment.start && range.end === segment.end,
-					)
-				) {
+				if (segment.kind === "url" && hiddenRangeKeys.has(rangeKey(segment))) {
 					node = null;
 				} else if (segment.kind === "mention" && segment.profile) {
 					node = (
@@ -64,6 +76,16 @@ export function TweetRichText({
 						>
 							<span className={tweetMentionClass}>@{segment.username}</span>
 						</ProfilePreview>
+					);
+				} else if (segment.kind === "mention") {
+					node = (
+						<a
+							key={`segment-${String(index)}`}
+							className={tweetMentionClass}
+							href={`/profiles/${encodeURIComponent(segment.username)}`}
+						>
+							@{segment.username}
+						</a>
 					);
 				} else if (segment.kind === "url") {
 					const href = safeHttpUrl(segment.expandedUrl);
@@ -76,7 +98,9 @@ export function TweetRichText({
 								rel="noreferrer"
 								target="_blank"
 							>
-								{segment.displayUrl}
+								{urlLabel === "expanded"
+									? segment.expandedUrl
+									: segment.displayUrl}
 							</a>
 						);
 					}
@@ -99,6 +123,6 @@ export function TweetRichText({
 				);
 			})}
 			{text.slice(cursor)}
-		</p>
+		</Wrapper>
 	);
 }

@@ -178,7 +178,7 @@ describe("today route", () => {
 		expect(screen.getByText("Reply:")).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "@alice" })).toHaveAttribute(
 			"href",
-			"https://x.com/alice",
+			"/profiles/alice",
 		);
 		expect(screen.getByRole("link", { name: "tweet_1" })).toHaveAttribute(
 			"href",

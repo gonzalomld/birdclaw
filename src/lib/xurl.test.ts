@@ -534,7 +534,27 @@ describe("xurl transport wrapper", () => {
 		]);
 	});
 
-	it("honors explicit OAuth2 app and username overrides", async () => {
+	it("ignores configured OAuth2 overrides for recent search reads", async () => {
+		process.env.BIRDCLAW_XURL_OAUTH2_APP = "xurl-steipete";
+		process.env.BIRDCLAW_XURL_OAUTH2_USERNAME = "openclaw";
+		execFileAsyncMock.mockResolvedValueOnce({
+			stdout: JSON.stringify({ data: [] }),
+			stderr: "",
+		});
+		const { searchRecentTweets } = await import("./xurl");
+
+		await searchRecentTweets("openclaw", {
+			maxResults: 10,
+		});
+
+		expect(execFileAsyncMock).toHaveBeenCalledWith("xurl", [
+			"--auth",
+			"oauth2",
+			`/2/tweets/search/recent?query=openclaw&max_results=10&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=${THREAD_TWEET_FIELDS}&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
+		]);
+	});
+
+	it("ignores configured OAuth2 overrides for conversation search reads", async () => {
 		process.env.BIRDCLAW_XURL_OAUTH2_APP = "xurl-steipete";
 		process.env.BIRDCLAW_XURL_OAUTH2_USERNAME = "openclaw";
 		execFileAsyncMock.mockResolvedValueOnce({
@@ -546,16 +566,11 @@ describe("xurl transport wrapper", () => {
 		await searchRecentByConversationId("123", {
 			maxResults: 100,
 			auth: "oauth2",
-			username: "steipete",
 		});
 
 		expect(execFileAsyncMock).toHaveBeenCalledWith("xurl", [
-			"--app",
-			"xurl-steipete",
 			"--auth",
 			"oauth2",
-			"--username",
-			"openclaw",
 			`/2/tweets/search/recent?query=conversation_id%3A123&max_results=100&expansions=${AUTHOR_MEDIA_EXPANSIONS}&tweet.fields=${THREAD_TWEET_FIELDS}&media.fields=${MEDIA_FIELDS}&user.fields=${RICH_USER_FIELDS}`,
 		]);
 	});

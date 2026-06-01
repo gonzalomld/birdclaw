@@ -47,7 +47,7 @@ export interface XurlJsonCommandAttempt {
 }
 type OAuth2UsernameCandidate = {
 	app?: string;
-	username: string;
+	username?: string;
 };
 
 let transportStatusCache:
@@ -576,10 +576,10 @@ function configuredOAuth2Candidate(primaryUsername: string | undefined) {
 	);
 	if (!app && !username) return undefined;
 	const effectiveUsername = username ?? primaryUsername;
-	if (!effectiveUsername) return undefined;
+	if (!app && !effectiveUsername) return undefined;
 	return {
 		...(app ? { app } : {}),
-		username: effectiveUsername,
+		...(effectiveUsername ? { username: effectiveUsername } : {}),
 	};
 }
 
@@ -587,10 +587,12 @@ function runOAuth2JsonCommandEffect({
 	args,
 	username,
 	options,
+	useConfiguredCandidate = true,
 }: {
 	args: string[];
 	username?: string;
 	options?: JsonCommandOptions;
+	useConfiguredCandidate?: boolean;
 }) {
 	const primaryUsername = cleanXurlUsernameLabel(username);
 	return Effect.gen(function* () {
@@ -605,7 +607,9 @@ function runOAuth2JsonCommandEffect({
 		let authCandidate: OAuth2UsernameCandidate | undefined = primaryUsername
 			? { username: primaryUsername }
 			: undefined;
-		const configuredCandidate = configuredOAuth2Candidate(primaryUsername);
+		const configuredCandidate = useConfiguredCandidate
+			? configuredOAuth2Candidate(primaryUsername)
+			: undefined;
 		if (configuredCandidate) {
 			authCandidate = configuredCandidate;
 		} else if (primaryUsername) {
@@ -1416,6 +1420,7 @@ export function searchRecentByConversationIdEffect(
 					args,
 					username,
 					options: { timeoutMs, signal, onAttempt },
+					useConfiguredCandidate: false,
 				})
 			: runJsonCommandEffect(args, { timeoutMs, signal, onAttempt });
 	return command.pipe(Effect.map(toXurlTweetsResponse));
@@ -1478,6 +1483,7 @@ export function searchRecentTweetsEffect(
 		args: [`/2/tweets/search/recent?${query.toString()}`],
 		username,
 		options: { timeoutMs },
+		useConfiguredCandidate: false,
 	}).pipe(Effect.map(toXurlTweetsResponse));
 }
 

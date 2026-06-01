@@ -18,11 +18,29 @@ import { ProfilePreview } from "./ProfilePreview";
 
 type CitationTweet = PeriodDigestContext["tweets"][number];
 type CitationContext = PeriodDigestContext | ProfileAnalysisContext;
+type VerticalBounds = { top: number; bottom: number };
 
 type InlineLookup = {
 	tweetsById: Map<string, CitationTweet>;
 	profilesByHandle: Map<string, ProfileRecord>;
 };
+
+function nearestVerticalClipBounds(element: HTMLElement): VerticalBounds {
+	let top = 0;
+	let bottom = window.innerHeight;
+	for (
+		let current = element.parentElement;
+		current;
+		current = current.parentElement
+	) {
+		const style = window.getComputedStyle(current);
+		if (!/(auto|scroll|hidden|clip)/.test(style.overflowY)) continue;
+		const rect = current.getBoundingClientRect();
+		top = Math.max(top, rect.top);
+		bottom = Math.min(bottom, rect.bottom);
+	}
+	return { top, bottom };
+}
 
 function normalizeTweetReference(value: string) {
 	return value
@@ -144,13 +162,25 @@ function TweetPreviewToken({
 
 	useLayoutEffect(() => {
 		if (!open) return;
-		const shell = shellRef.current;
-		if (!shell) return;
-		const shellRect = shell.getBoundingClientRect();
-		const cardHeight = cardRef.current?.offsetHeight ?? 220;
-		const belowSpace = window.innerHeight - shellRect.bottom;
-		const aboveSpace = shellRect.top;
-		setPlaceAbove(belowSpace < cardHeight + 18 && aboveSpace > belowSpace);
+		const updatePlacement = () => {
+			const shell = shellRef.current;
+			if (!shell) return;
+			const shellRect = shell.getBoundingClientRect();
+			const card = cardRef.current;
+			const cardRect = card?.getBoundingClientRect();
+			const cardHeight = Math.max(
+				card?.offsetHeight ?? 0,
+				cardRect?.height ?? 0,
+				220,
+			);
+			const bounds = nearestVerticalClipBounds(shell);
+			const belowSpace = bounds.bottom - shellRect.bottom;
+			const aboveSpace = shellRect.top - bounds.top;
+			setPlaceAbove(belowSpace < cardHeight + 18 && aboveSpace >= belowSpace);
+		};
+		updatePlacement();
+		const frame = window.requestAnimationFrame(updatePlacement);
+		return () => window.cancelAnimationFrame(frame);
 	}, [open]);
 
 	function closePreview() {
@@ -454,9 +484,7 @@ function renderInline(text: string, lookup: InlineLookup) {
 					<a
 						key={tokenKey}
 						className={tweetMentionClass}
-						href={`https://x.com/${token.slice(1)}`}
-						rel="noreferrer"
-						target="_blank"
+						href={`/profiles/${encodeURIComponent(token.slice(1))}`}
 					>
 						{token}
 					</a>
