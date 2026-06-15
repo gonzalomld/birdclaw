@@ -9,7 +9,8 @@ import { fetchProfileBioEntities } from "./profile-bio-entities";
 import { fetchProfileSnapshots } from "./profile-history";
 import { resolveProfilesForIdsEffect } from "./profile-resolver";
 import type { ProfileResolveResult } from "./profile-resolver";
-import { listDmConversations, listTimelineItems } from "./queries";
+import { listDmConversations } from "./dm-read-model";
+import { listTimelineItems } from "./timeline-read-model";
 import { expandUrlsFromTextsEffect } from "./url-expansion";
 import type {
 	DmConversationItem,

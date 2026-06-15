@@ -5,7 +5,7 @@ import {
 	runRouteEffect,
 	sensitiveRequestErrorResponse,
 } from "#/lib/http-effect";
-import { getTweetConversation } from "#/lib/queries";
+import { getTweetConversation } from "#/lib/timeline-read-model";
 
 function json(data: unknown, status = 200) {
 	return new Response(JSON.stringify(data), {

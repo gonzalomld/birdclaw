@@ -7,7 +7,7 @@ import {
 	runRouteEffect,
 	sensitiveRequestErrorResponse,
 } from "#/lib/http-effect";
-import { queryResource } from "#/lib/queries";
+import { queryResource } from "#/lib/query-resource";
 import type {
 	DmQuery,
 	ReplyFilter,

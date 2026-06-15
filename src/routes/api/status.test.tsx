@@ -13,7 +13,7 @@ vi.mock("#/lib/backup", () => ({
 		Effect.promise(() => Promise.resolve(mocks.maybeAutoUpdateBackup())),
 }));
 
-vi.mock("#/lib/queries", () => ({
+vi.mock("#/lib/query-status", () => ({
 	getQueryEnvelope: mocks.getQueryEnvelope,
 	getQueryEnvelopeEffect: () =>
 		Effect.promise(() => Promise.resolve(mocks.getQueryEnvelope())),

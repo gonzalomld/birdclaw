@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const listTimelineItemsMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./queries", () => ({
+vi.mock("./timeline-read-model", () => ({
 	listTimelineItems: (...args: unknown[]) => listTimelineItemsMock(...args),
 }));
 
@@ -155,7 +155,7 @@ describe("mention export", () => {
 		]);
 		const { serializeMentionItemsAsXurlCompatible } =
 			await import("./mentions-export");
-		const { listTimelineItems } = await import("./queries");
+		const { listTimelineItems } = await import("./timeline-read-model");
 
 		const payload = serializeMentionItemsAsXurlCompatible(
 			listTimelineItems({

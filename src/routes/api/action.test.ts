@@ -25,7 +25,7 @@ vi.mock("#/lib/blocks", () => ({
 		Effect.tryPromise(() => Promise.resolve(syncBlocksMock(...args))),
 }));
 
-vi.mock("#/lib/queries", () => ({
+vi.mock("#/lib/query-actions", () => ({
 	createPost: (...args: unknown[]) => createPostMock(...args),
 	createPostEffect: (...args: unknown[]) =>
 		Effect.tryPromise(() => Promise.resolve(createPostMock(...args))),

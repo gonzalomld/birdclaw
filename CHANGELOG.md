@@ -8,6 +8,7 @@
 - Isolate web reads onto query-only SQLite connections while serializing action and sync writes through one measured writer queue.
 - Share page caps, cursor progression, delays, and repeated-cursor protection across live timeline, DM, and follow-graph sync.
 - Stream archive arrays and backup JSONL records through resumable batches instead of buffering entire source files.
+- Split query access into typed timeline, DM, status, resource, and action modules while retaining the existing compatibility import.
 
 ## 0.8.2 - 2026-06-15
 

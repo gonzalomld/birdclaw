@@ -3,7 +3,7 @@ import path from "node:path";
 import { Effect } from "effect";
 import { getNativeDb } from "./db";
 import { runEffectPromise } from "./effect-runtime";
-import { listTimelineItems } from "./queries";
+import { listTimelineItems } from "./timeline-read-model";
 import { lookupTweetsByIdsEffect } from "./tweet-lookup";
 import { renderTweetMarkdown, renderTweetPlainText } from "./tweet-render";
 import type { TweetEntities, XurlMentionUser } from "./types";

@@ -2,7 +2,8 @@ import { Effect } from "effect";
 import { getNativeDb } from "./db";
 import { runEffectPromise } from "./effect-runtime";
 import { scoreInboxItemWithOpenAIEffect } from "./openai";
-import { listDmConversations, listTimelineItems } from "./queries";
+import { listDmConversations } from "./dm-read-model";
+import { listTimelineItems } from "./timeline-read-model";
 import type { InboxItem, InboxQuery, InboxResponse } from "./types";
 
 function heuristicSummary(kind: InboxItem["entityKind"]) {

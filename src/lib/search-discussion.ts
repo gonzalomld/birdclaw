@@ -8,7 +8,8 @@ import {
 	tryPromise,
 } from "./effect-runtime";
 import { getNativeDb } from "./db";
-import { listDmConversations, listTimelineItems } from "./queries";
+import { listDmConversations } from "./dm-read-model";
+import { listTimelineItems } from "./timeline-read-model";
 import { readSyncCache, writeSyncCache } from "./sync-cache";
 import {
 	syncTweetSearchEffect,

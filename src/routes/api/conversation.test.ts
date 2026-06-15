@@ -6,7 +6,7 @@ import { getRouteHandler } from "#/test/route-handlers";
 const getTweetConversationMock = vi.fn();
 const maybeAutoUpdateBackupMock = vi.fn();
 
-vi.mock("#/lib/queries", () => ({
+vi.mock("#/lib/timeline-read-model", () => ({
 	getTweetConversation: (...args: unknown[]) =>
 		getTweetConversationMock(...args),
 }));

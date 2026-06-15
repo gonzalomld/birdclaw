@@ -6,11 +6,8 @@ import { runEffectPromise, tryPromise } from "./effect-runtime";
 import { getLinkInsights } from "./link-insights";
 import { syncMentionThreadsEffect } from "./mention-threads-live";
 import { syncMentionsEffect } from "./mentions-live";
-import {
-	getTweetsByIds,
-	listDmConversations,
-	listTimelineItems,
-} from "./queries";
+import { listDmConversations } from "./dm-read-model";
+import { getTweetsByIds, listTimelineItems } from "./timeline-read-model";
 import { readSyncCache, writeSyncCache } from "./sync-cache";
 import { syncHomeTimelineEffect, type HomeTimelineMode } from "./timeline-live";
 import type { EmbeddedTweet, ProfileRecord, TweetEntities } from "./types";

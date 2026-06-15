@@ -6,7 +6,7 @@ import { getRouteHandler } from "#/test/route-handlers";
 const queryResourceMock = vi.fn();
 const maybeAutoUpdateBackupMock = vi.fn();
 
-vi.mock("#/lib/queries", () => ({
+vi.mock("#/lib/query-resource", () => ({
 	queryResource: (...args: unknown[]) => queryResourceMock(...args),
 }));
 vi.mock("#/lib/backup", () => ({

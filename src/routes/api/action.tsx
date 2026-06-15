@@ -18,7 +18,7 @@ import {
 	createDmReplyEffect,
 	createPostEffect,
 	createTweetReplyEffect,
-} from "#/lib/queries";
+} from "#/lib/query-actions";
 import type { ActionsTransport } from "#/lib/config";
 import type { InboxKind } from "#/lib/types";
 

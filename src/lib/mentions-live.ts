@@ -9,7 +9,7 @@ import { databaseWriteEffect } from "./database-writer";
 import { getNativeDb } from "./db";
 import { runEffectPromise, tryPromise } from "./effect-runtime";
 import { serializeMentionItemsAsXurlCompatible } from "./mentions-export";
-import { listTimelineItems } from "./queries";
+import { listTimelineItems } from "./timeline-read-model";
 import { deleteSyncCache, readSyncCache, writeSyncCache } from "./sync-cache";
 import type {
 	ReplyFilter,

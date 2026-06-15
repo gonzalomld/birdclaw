@@ -6,7 +6,7 @@ import {
 	runRouteEffect,
 	sensitiveRequestErrorResponse,
 } from "#/lib/http-effect";
-import { getQueryEnvelopeEffect } from "#/lib/queries";
+import { getQueryEnvelopeEffect } from "#/lib/query-status";
 
 export const Route = createFileRoute("/api/status")({
 	server: {

@@ -1,4 +1,4 @@
-import { listTimelineItems } from "./queries";
+import { listTimelineItems } from "./timeline-read-model";
 import { renderTweetMarkdown, renderTweetPlainText } from "./tweet-render";
 import type {
 	ReplyFilter,
